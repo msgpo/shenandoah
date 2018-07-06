@@ -194,6 +194,7 @@ class oopDesc {
   void bool_field_put(int offset, jboolean contents);
 
   jint int_field(int offset) const;
+  jint int_field_raw(int offset) const;
   void int_field_put(int offset, jint contents);
 
   jshort short_field(int offset) const;

@@ -36,7 +36,7 @@
 template <typename T, class OopClosureType>
 void InstanceMirrorKlass::oop_oop_iterate_statics(oop obj, OopClosureType* closure) {
   T* p         = (T*)start_of_static_fields(obj);
-  T* const end = p + java_lang_Class::static_oop_field_count(obj);
+  T* const end = p + java_lang_Class::static_oop_field_count_raw(obj);
 
   for (; p < end; ++p) {
     Devirtualizer::do_oop(closure, p);
@@ -89,7 +89,7 @@ void InstanceMirrorKlass::oop_oop_iterate_statics_bounded(oop obj,
                                                           OopClosureType* closure,
                                                           MemRegion mr) {
   T* p   = (T*)start_of_static_fields(obj);
-  T* end = p + java_lang_Class::static_oop_field_count(obj);
+  T* end = p + java_lang_Class::static_oop_field_count_raw(obj);
 
   T* const l   = (T*)mr.start();
   T* const h   = (T*)mr.end();
