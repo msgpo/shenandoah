@@ -1120,6 +1120,7 @@ void ShenandoahTraversalGC::weak_refs_work_doit() {
 
   {
     ShenandoahGCPhase phase(phase_process);
+    ShenandoahTerminationTracker termination(ShenandoahPhaseTimings::weakrefs_termination);
 
     ShenandoahForwardedIsAliveClosure is_alive;
     if (UseShenandoahMatrix) {

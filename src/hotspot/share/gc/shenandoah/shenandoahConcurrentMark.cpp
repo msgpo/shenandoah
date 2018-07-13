@@ -676,6 +676,11 @@ void ShenandoahConcurrentMark::weak_refs_work_doit(bool full_gc) {
           ShenandoahPhaseTimings::full_gc_weakrefs_process :
           ShenandoahPhaseTimings::weakrefs_process;
 
+  ShenandoahPhaseTimings::Phase phase_process_termination =
+          full_gc ?
+          ShenandoahPhaseTimings::full_gc_weakrefs_termination :
+          ShenandoahPhaseTimings::weakrefs_termination;
+
   shenandoah_assert_rp_isalive_not_installed();
   ReferenceProcessorIsAliveMutator fix_isalive(rp, sh->is_alive_closure());
 
@@ -704,6 +709,7 @@ void ShenandoahConcurrentMark::weak_refs_work_doit(bool full_gc) {
 
   {
     ShenandoahGCPhase phase(phase_process);
+    ShenandoahTerminationTracker phase_term(phase_process_termination);
 
     if (sh->has_forwarded_objects()) {
       ShenandoahForwardedIsAliveClosure is_alive;

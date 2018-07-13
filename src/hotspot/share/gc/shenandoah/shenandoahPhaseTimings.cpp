@@ -139,6 +139,7 @@ void ShenandoahPhaseTimings::init_phase_names() {
   _phase_names[termination]                     = "    Termination";
   _phase_names[weakrefs]                        = "  Weak References";
   _phase_names[weakrefs_process]                = "    Process";
+  _phase_names[weakrefs_termination]            = "      Termination";
   _phase_names[purge]                           = "  System Purge";
   _phase_names[purge_class_unload]              = "    Unload Classes";
   _phase_names[purge_par]                       = "    Parallel Cleanup";
@@ -234,6 +235,7 @@ void ShenandoahPhaseTimings::init_phase_names() {
   _phase_names[full_gc_mark_termination]        = "      Termination";
   _phase_names[full_gc_weakrefs]                = "    Weak References";
   _phase_names[full_gc_weakrefs_process]        = "      Process";
+  _phase_names[full_gc_weakrefs_termination]    = "        Termination";
   _phase_names[full_gc_purge]                   = "    System Purge";
   _phase_names[full_gc_purge_class_unload]      = "      Unload Classes";
   _phase_names[full_gc_purge_par]               = "    Parallel Cleanup";
@@ -438,13 +440,13 @@ void ShenandoahTerminationTimings::print() const {
 
 ShenandoahTerminationTimingsTracker::ShenandoahTerminationTimingsTracker(uint worker_id) :
   _worker_id(worker_id)  {
-  if (ShenandoahTerminationTace) {
+  if (ShenandoahTerminationTrace) {
     _start_time = os::elapsedTime();
   }
 }
 
 ShenandoahTerminationTimingsTracker::~ShenandoahTerminationTimingsTracker() {
-  if (ShenandoahTerminationTace) {
+  if (ShenandoahTerminationTrace) {
     ShenandoahHeap::heap()->phase_timings()->termination_times()->record_time_secs(_worker_id, os::elapsedTime() - _start_time);
   }
 }
@@ -457,7 +459,9 @@ ShenandoahTerminationTracker::ShenandoahTerminationTracker(ShenandoahPhaseTiming
          phase == ShenandoahPhaseTimings::final_traversal_gc_termination ||
          phase == ShenandoahPhaseTimings::full_gc_mark_termination ||
          phase == ShenandoahPhaseTimings::conc_termination ||
-         phase == ShenandoahPhaseTimings::conc_traversal_termination,
+         phase == ShenandoahPhaseTimings::conc_traversal_termination ||
+         phase == ShenandoahPhaseTimings::weakrefs_termination ||
+         phase == ShenandoahPhaseTimings::full_gc_weakrefs_termination,
          "Only these phases");
 
   assert(Thread::current()->is_VM_thread() || Thread::current()->is_ConcurrentGC_thread(),

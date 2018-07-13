@@ -434,7 +434,7 @@
           "Arrays and objects are enqueued instead of processed in-place"   \
           "when their size exceed this threshold")                          \
                                                                             \
-  diagnostic(bool, ShenandoahTerminationTace, false,                        \
+  diagnostic(bool, ShenandoahTerminationTrace, false,                       \
           "Tracing task termination timings")                               \
                                                                             \
   diagnostic(bool, ShenandoahElasticTLAB, true,                             \
