@@ -787,7 +787,11 @@ HeapWord* ShenandoahHeap::allocate_new_tlab(size_t min_size,
 #endif
   ShenandoahAllocationRequest req = ShenandoahAllocationRequest::for_tlab(min_size, requested_size);
   HeapWord* res = allocate_memory(req);
-  *actual_size = req.actual_size();
+  if (res != NULL) {
+    *actual_size = req.actual_size();
+  } else {
+    *actual_size = 0;
+  }
   return res;
 }
 
