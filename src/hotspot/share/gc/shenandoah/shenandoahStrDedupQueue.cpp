@@ -132,7 +132,7 @@ oop ShenandoahStrDedupQueue::pop_impl() {
       return NULL;
     }
 
-    oop obj;
+    oop obj = NULL;
     if (pop_candidate(obj)) {
       assert(ShenandoahStringDedup::is_candidate(obj), "Must be a candidate");
       return obj;
