@@ -30,6 +30,7 @@
  * @modules java.base/java.lang:open
  *          java.management
  * @run main/othervm -XX:+UseShenandoahGC -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseStringDeduplication -Xmx512M -Xlog:gc+stats
+ *                   -DtargetStrings=3000000
  *                   ShenandoahStrDedupStress
  *
  * @run main/othervm -XX:+UseShenandoahGC -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseStringDeduplication -Xmx512M -Xlog:gc+stats
@@ -69,7 +70,7 @@
  *                   ShenandoahStrDedupStress
  *
  * @run main/othervm -XX:+UseShenandoahGC -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseStringDeduplication -Xmx512M -Xlog:gc+stats
- *                   -XX:ShenandoahUpdateRefsEarly=off
+ *                   -XX:ShenandoahUpdateRefsEarly=off -DtargetStrings=3000000
  *                   ShenandoahStrDedupStress
  *
  * @run main/othervm -XX:+UseShenandoahGC -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -XX:+UseStringDeduplication -Xmx512M -Xlog:gc+stats
@@ -101,8 +102,8 @@ public class ShenandoahStrDedupStress {
   private static Field valueField;
   private static Unsafe unsafe;
 
-  private static long TARGET_STRINGS = Long.getLong("targetStrings", 3_000_000);
-  private static long TARGET_OVERWRITES = Long.getLong("targetOverwrites", 10_000);
+  private static long TARGET_STRINGS = Long.getLong("targetStrings", 2_500_000);
+  private static long TARGET_OVERWRITES = Long.getLong("targetOverwrites", 600_000);
 
   private static final int UNIQUE_STRINGS = 20;
   static {
