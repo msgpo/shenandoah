@@ -2113,6 +2113,13 @@ void CompileBroker::invoke_compiler_on_method(CompileTask* task) {
       ci_env.report_failure(failure_reason);
     }
 
+#if INCLUDE_SHENANDOAHGC
+    guarantee(!UseShenandoahGC || !ShenandoahCompileCheck || (compilable != ciEnv::MethodCompilable_not_at_tier),
+              "Not compilable on level %d due to: %s", task_level, failure_reason);
+    guarantee(!UseShenandoahGC || !ShenandoahCompileCheck || (compilable != ciEnv::MethodCompilable_never),
+              "Never compilable due to: %s", failure_reason);
+#endif
+
     post_compile(thread, task, !ci_env.failing(), &ci_env);
     if (event.should_commit()) {
       post_compilation_event(&event, task);
