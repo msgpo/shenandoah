@@ -2082,6 +2082,10 @@ void CompileBroker::invoke_compiler_on_method(CompileTask* task) {
 
     ciMethod* target = ci_env.get_method_from_handle(target_handle);
 
+#if INCLUDE_SHENANDOAHGC
+    bool target_compilable = target->can_be_parsed() && target->can_be_compiled();
+#endif
+
     TraceTime t1("compilation", &time);
     EventCompilation event;
 
@@ -2114,9 +2118,9 @@ void CompileBroker::invoke_compiler_on_method(CompileTask* task) {
     }
 
 #if INCLUDE_SHENANDOAHGC
-    guarantee(!UseShenandoahGC || !ShenandoahCompileCheck || (compilable != ciEnv::MethodCompilable_not_at_tier),
+    guarantee(!UseShenandoahGC || !ShenandoahCompileCheck || !target_compilable || (compilable != ciEnv::MethodCompilable_not_at_tier),
               "Not compilable on level %d due to: %s", task_level, failure_reason);
-    guarantee(!UseShenandoahGC || !ShenandoahCompileCheck || (compilable != ciEnv::MethodCompilable_never),
+    guarantee(!UseShenandoahGC || !ShenandoahCompileCheck || !target_compilable ||(compilable != ciEnv::MethodCompilable_never || !target_compilable),
               "Never compilable due to: %s", failure_reason);
 #endif
 
