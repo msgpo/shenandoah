@@ -52,6 +52,7 @@
 #include "gc/shenandoah/shenandoahPacer.hpp"
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.hpp"
+#include "gc/shenandoah/shenandoahSATBMarkQueueFilter.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
@@ -190,7 +191,9 @@ jint ShenandoahHeap::initialize() {
 
   // The call below uses stuff (the SATB* things) that are in G1, but probably
   // belong into a shared location.
-  ShenandoahBarrierSet::satb_mark_queue_set().initialize(SATB_Q_CBL_mon,
+  ShenandoahSATBMarkQueueFilter* satb_filter = new ShenandoahSATBMarkQueueFilter(this);
+  ShenandoahBarrierSet::satb_mark_queue_set().initialize(satb_filter,
+                                               SATB_Q_CBL_mon,
                                                SATB_Q_FL_lock,
                                                20 /*G1SATBProcessCompletedThreshold */,
                                                Shared_SATB_Q_lock);
