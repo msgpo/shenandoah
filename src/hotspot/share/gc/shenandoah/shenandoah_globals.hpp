@@ -423,7 +423,7 @@
   diagnostic(bool, ShenandoahElasticTLAB, true,                             \
           "Use Elastic TLABs with Shenandoah")                              \
                                                                             \
-  diagnostic(bool, ShenandoahCompileCheck, trueInDebug,                     \
+  diagnostic(bool, ShenandoahCompileCheck, false,                           \
           "Assert that methods are successfully compilable")                \
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP
