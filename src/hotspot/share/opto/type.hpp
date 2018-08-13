@@ -1028,8 +1028,6 @@ public:
 
   virtual const TypeOopPtr *cast_to_instance_id(int instance_id) const;
 
-  virtual const TypeOopPtr *cast_to_nonconst() const;
-
   // corresponding pointer to klass, for a given instance
   const TypeKlassPtr* as_klass_type() const;
 
@@ -1111,9 +1109,6 @@ class TypeInstPtr : public TypeOopPtr {
   virtual const Type *cast_to_exactness(bool klass_is_exact) const;
 
   virtual const TypeOopPtr *cast_to_instance_id(int instance_id) const;
-
-  virtual const TypeOopPtr *cast_to_nonconst() const;
-  virtual const TypeInstPtr *cast_to_const(ciObject* const_oop) const;
 
   virtual const TypePtr *add_offset( intptr_t offset ) const;
 
@@ -1197,8 +1192,6 @@ public:
   virtual const Type *cast_to_exactness(bool klass_is_exact) const;
 
   virtual const TypeOopPtr *cast_to_instance_id(int instance_id) const;
-
-  virtual const TypeOopPtr *cast_to_nonconst() const;
 
   virtual const TypeAryPtr* cast_to_size(const TypeInt* size) const;
   virtual const TypeInt* narrow_size_type(const TypeInt* size) const;

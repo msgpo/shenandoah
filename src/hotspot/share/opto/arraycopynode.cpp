@@ -157,7 +157,7 @@ Node* ArrayCopyNode::shenandoah_add_storeval_barrier(PhaseGVN *phase, bool can_r
   if (ShenandoahStoreValReadBarrier) {
     RegionNode* region = new RegionNode(3);
     const Type* v_t = phase->type(v);
-    Node* phi = new PhiNode(region, v_t->isa_oopptr() ? v_t->is_oopptr()->cast_to_nonconst() : v_t);
+    Node* phi = new PhiNode(region, v_t);
     Node* cmp = phase->transform(new CmpPNode(v, phase->zerocon(T_OBJECT)));
     Node* bol = phase->transform(new BoolNode(cmp, BoolTest::ne));
     IfNode* iff = new IfNode(ctl, bol, PROB_LIKELY_MAG(3), COUNT_UNKNOWN);
