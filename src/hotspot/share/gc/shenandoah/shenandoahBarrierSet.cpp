@@ -288,7 +288,11 @@ oop ShenandoahBarrierSet::write_barrier_mutator(oop obj) {
 
     size_t max = ShenandoahEvacAssist;
     if (max > 0) {
-      ShenandoahMarkingContext* ctx = _heap->complete_marking_context();
+      // Traversal is special: it uses "next" marking context, because it coalesces evac with mark.
+      // Other code uses "complete" marking, because evac happens after the mark.
+      ShenandoahMarkingContext* ctx = _heap->is_concurrent_traversal_in_progress() ?
+                                      _heap->next_marking_context() : _heap->complete_marking_context();
+
       ShenandoahHeapRegion* r = _heap->heap_region_containing(obj);
       assert(r->is_cset(), "sanity");
 
