@@ -894,7 +894,7 @@ const Type* ShenandoahBarrierNode::Value(PhaseGVN* phase) const {
     return _type;
   }
 
-  const Type* type = t2->is_oopptr();
+  const Type* type = t2->is_oopptr()->cast_to_nonconst();
   return type;
 }
 
@@ -2774,7 +2774,7 @@ void ShenandoahWriteBarrierNode::evacuation_in_progress(Node* c, Node* val, Node
   phase->register_new_node(mem_proj, call);
   Node* res_proj = new ProjNode(call, TypeFunc::Parms);
   phase->register_new_node(res_proj, call);
-  Node* res = new CheckCastPPNode(ctrl_proj, res_proj, phase->igvn().type(val)->is_oopptr());
+  Node* res = new CheckCastPPNode(ctrl_proj, res_proj, phase->igvn().type(val)->is_oopptr()->cast_to_nonconst());
   phase->register_new_node(res, ctrl_proj);
   region->init_req(2, ctrl_proj);
   val_phi->init_req(2, res);
@@ -3075,11 +3075,11 @@ void ShenandoahWriteBarrierNode::pin_and_expand(PhaseIdealLoop* phase) {
     IfNode* heap_stable_iff = heap_stable_ctrl->in(0)->as_If();
 
     Node* evacuation_region = new RegionNode(5);
-    Node* evacuation_val_phi = new PhiNode(evacuation_region, uncasted_val->bottom_type()->is_oopptr());
+    Node* evacuation_val_phi = new PhiNode(evacuation_region, uncasted_val->bottom_type()->is_oopptr()->cast_to_nonconst());
     Node* evacuation_mem_phi = PhiNode::make(evacuation_region, wb_mem, Type::MEMORY, phase->C->alias_type(wb->adr_type())->adr_type());
     Node* evacuation_raw_mem_phi = PhiNode::make(evacuation_region, raw_mem, Type::MEMORY, TypeRawPtr::BOTTOM);
     Node* region = new RegionNode(3);
-    Node* val_phi = new PhiNode(region, uncasted_val->bottom_type()->is_oopptr());
+    Node* val_phi = new PhiNode(region, uncasted_val->bottom_type()->is_oopptr()->cast_to_nonconst());
     Node* mem_phi = PhiNode::make(region, wb_mem, Type::MEMORY, phase->C->alias_type(wb->adr_type())->adr_type());
     Node* raw_mem_phi = PhiNode::make(region, raw_mem, Type::MEMORY, TypeRawPtr::BOTTOM);
 
@@ -3441,7 +3441,7 @@ const Type* ShenandoahEnqueueBarrierNode::bottom_type() const {
   if (t == TypePtr::NULL_PTR) {
     return t;
   }
-  return t->is_oopptr();
+  return t->is_oopptr()->cast_to_nonconst();
 }
 
 const Type* ShenandoahEnqueueBarrierNode::Value(PhaseGVN* phase) const {
@@ -3455,7 +3455,7 @@ const Type* ShenandoahEnqueueBarrierNode::Value(PhaseGVN* phase) const {
   if (t == TypePtr::NULL_PTR) {
     return t;
   }
-  return t->is_oopptr();
+  return t->is_oopptr()->cast_to_nonconst();
 }
 
 int ShenandoahEnqueueBarrierNode::needed(Node* n) {

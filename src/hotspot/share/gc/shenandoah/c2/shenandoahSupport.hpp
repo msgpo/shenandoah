@@ -61,7 +61,7 @@ public:
   };
 
   ShenandoahBarrierNode(Node* ctrl, Node* mem, Node* obj, bool allow_fromspace)
-    : TypeNode(obj->bottom_type(), 3),
+    : TypeNode(obj->bottom_type()->isa_oopptr() ? obj->bottom_type()->is_oopptr()->cast_to_nonconst() : obj->bottom_type(), 3),
       _allow_fromspace(allow_fromspace) {
 
     init_req(Control, ctrl);
@@ -74,7 +74,7 @@ public:
   static Node* skip_through_barrier(Node* n);
 
   static const TypeOopPtr* brooks_pointer_type(const Type* t) {
-    return t->is_oopptr()->add_offset(BrooksPointer::byte_offset())->is_oopptr();
+    return t->is_oopptr()->cast_to_nonconst()->add_offset(BrooksPointer::byte_offset())->is_oopptr();
   }
 
   virtual const TypePtr* adr_type() const {
