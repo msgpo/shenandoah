@@ -586,3 +586,16 @@ void BarrierSetC2::clone(GraphKit* kit, Node* src, Node* dst, Node* size, bool i
     kit->set_all_memory(n);
   }
 }
+
+Node* BarrierSetC2::cmpoop_cmp(GraphKit* kit, Node* a, Node* b) const {
+  return kit->gvn().transform(new CmpPNode(b, a));
+}
+
+void BarrierSetC2::cmpoop_if(GraphKit* kit, Node* tst, float true_prob, float cnt,
+                             Node*& taken_branch, Node*& untaken_branch,
+                             Node*& taken_memory, Node*& untaken_memory) const {
+  IfNode* iff = kit->create_and_map_if(kit->control(), tst, true_prob, cnt);
+  assert(iff->_prob > 0.0f,"Optimizer made bad probability in parser");
+  taken_branch   = new IfTrueNode(iff);
+  untaken_branch = new IfFalseNode(iff);
+}

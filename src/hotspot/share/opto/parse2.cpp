@@ -1604,24 +1604,30 @@ void Parse::do_if(BoolTest::mask btest, Node* c) {
 
   // Generate real control flow
   float true_prob = (taken_if_true ? prob : untaken_prob);
-  IfNode* iff = create_and_map_if(control(), tst, true_prob, cnt);
-  assert(iff->_prob > 0.0f,"Optimizer made bad probability in parser");
-  Node* taken_branch   = new IfTrueNode(iff);
-  Node* untaken_branch = new IfFalseNode(iff);
+
+  Node* taken_branch = NULL;
+  Node* untaken_branch = NULL;
+  Node* taken_memory = NULL;
+  Node* untaken_memory = NULL;
+  if (c->Opcode() != Op_CmpP) {
+    IfNode* iff = create_and_map_if(control(), tst, true_prob, cnt);
+    assert(iff->_prob > 0.0f,"Optimizer made bad probability in parser");
+    taken_branch   = new IfTrueNode(iff);
+    untaken_branch = new IfFalseNode(iff);
+  } else {
+    _barrier_set->cmpoop_if(this, tst, true_prob, cnt, taken_branch, untaken_branch, taken_memory, untaken_memory);
+  }
   if (!taken_if_true) {  // Finish conversion to canonical form
     Node* tmp      = taken_branch;
     taken_branch   = untaken_branch;
     untaken_branch = tmp;
+    tmp            = taken_memory;
+    taken_memory   = untaken_memory;
+    untaken_memory = tmp;
   }
 
   taken_branch = _gvn.transform(taken_branch);
   untaken_branch = _gvn.transform(untaken_branch);
-  Node* taken_memory = NULL;
-  Node* untaken_memory = NULL;
-
-#if INCLUDE_SHENANDOAHGC
-  ShenandoahBarrierNode::do_cmpp_if(*this, taken_branch, untaken_branch, taken_memory, untaken_memory);
-#endif
 
   // Branch is taken:
   { PreserveJVMState pjvms(this);
@@ -2772,13 +2778,7 @@ void Parse::do_one_bytecode() {
     maybe_add_safepoint(iter().get_dest());
     a = pop();
     b = pop();
-#if INCLUDE_SHENANDOAHGC
-    if (UseShenandoahGC && ShenandoahAcmpBarrier && ShenandoahVerifyOptoBarriers) {
-      a = access_resolve_for_write(a);
-      b = access_resolve_for_write(b);
-    }
-#endif
-    c = _gvn.transform( new CmpPNode(b, a) );
+    c = _barrier_set->cmpoop_cmp(this, a, b);
     c = optimize_cmp_with_klass(c);
     do_if(btest, c);
     break;
