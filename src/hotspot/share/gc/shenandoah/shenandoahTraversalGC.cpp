@@ -609,8 +609,6 @@ void ShenandoahTraversalGC::main_loop_work(T* cl, jushort* live_data, uint worke
   ShenandoahTraversalSATBBufferClosure drain_satb(q);
   SATBMarkQueueSet& satb_mq_set = ShenandoahBarrierSet::satb_mark_queue_set();
 
-  int seed = 17;
-
   while (true) {
     if (check_and_handle_cancelled_gc(terminator)) return;
 
@@ -623,7 +621,7 @@ void ShenandoahTraversalGC::main_loop_work(T* cl, jushort* live_data, uint worke
       if (q->pop_buffer(task) ||
           q->pop_local(task) ||
           q->pop_overflow(task) ||
-          queues->steal(worker_id, &seed, task)) {
+          queues->steal(worker_id, task)) {
         conc_mark->do_task<T>(q, cl, live_data, &task);
         work++;
       } else {

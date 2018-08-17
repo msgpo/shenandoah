@@ -933,7 +933,6 @@ void ShenandoahConcurrentMark::mark_loop_prework(uint w, ParallelTaskTerminator 
 
 template <class T, bool CANCELLABLE>
 void ShenandoahConcurrentMark::mark_loop_work(T* cl, jushort* live_data, uint worker_id, ParallelTaskTerminator *terminator) {
-  int seed = 17;
   uintx stride = ShenandoahMarkLoopStride;
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
@@ -991,7 +990,7 @@ void ShenandoahConcurrentMark::mark_loop_work(T* cl, jushort* live_data, uint wo
     uint work = 0;
     for (uint i = 0; i < stride; i++) {
       if (try_queue(q, t) ||
-          queues->steal(worker_id, &seed, t)) {
+          queues->steal(worker_id, t)) {
         do_task<T>(q, cl, live_data, &t);
         work++;
       } else {
