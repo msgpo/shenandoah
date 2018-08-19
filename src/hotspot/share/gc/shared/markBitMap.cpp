@@ -29,8 +29,8 @@
 #include "utilities/bitMap.inline.hpp"
 
 MarkBitMapRO::MarkBitMapRO(int shifter) :
-  _bm(),
-  _shifter(shifter) {
+  _shifter(shifter),
+  _bm() {
   _bmStartWord = 0;
   _bmWordSize = 0;
 }

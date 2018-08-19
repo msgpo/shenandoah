@@ -314,13 +314,14 @@ class MacroAssembler: public Assembler {
   void load_klass(Register dst, Register src);
   void store_klass(Register dst, Register src);
 
-  void resolve_for_read(DecoratorSet decorators, Register obj);
-  void resolve_for_write(DecoratorSet decorators, Register obj);
-
   void access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                       Register tmp1, Register thread_tmp);
   void access_store_at(BasicType type, DecoratorSet decorators, Address dst, Register src,
                        Register tmp1, Register tmp2);
+
+  // Resolves obj access. Result is placed in the same register.
+  // All other registers are preserved.
+  void resolve(DecoratorSet decorators, Register obj);
 
   void load_heap_oop(Register dst, Address src, Register tmp1 = noreg,
                      Register thread_tmp = noreg, DecoratorSet decorators = 0);

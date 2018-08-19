@@ -61,6 +61,10 @@ public:
   virtual void obj_equals(MacroAssembler* masm,
                           Register obj1, Address obj2);
 
+  virtual void resolve(MacroAssembler* masm, DecoratorSet decorators, Register obj) {
+    // Default implementation does not need to do anything.
+  }
+
   // Support for jniFastGetField to try resolving a jobject/jweak in native
   virtual void try_resolve_jobject_in_native(MacroAssembler* masm, Register jni_env,
                                              Register obj, Register tmp, Label& slowpath);
@@ -77,9 +81,6 @@ public:
                              int con_size_in_bytes,
                              Register t1,
                              Label& slow_case);
-
-  virtual void resolve_for_read(MacroAssembler* masm, DecoratorSet decorators, Register obj);
-  virtual void resolve_for_write(MacroAssembler* masm, DecoratorSet decorators, Register obj);
 
   virtual void cmpxchg_oop(MacroAssembler* masm, DecoratorSet decorators,
                            Register res, Address addr, Register oldval, Register newval,

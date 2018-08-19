@@ -4357,7 +4357,7 @@ void TemplateTable::monitorenter() {
   // check for NULL object
   __ null_check(rax);
 
-  __ resolve_for_write(IS_NOT_NULL, rax);
+  __ resolve(IS_NOT_NULL, rax);
 
   const Address monitor_block_top(
         rbp, frame::interpreter_frame_monitor_block_top_offset * wordSize);
@@ -4456,7 +4456,7 @@ void TemplateTable::monitorexit() {
   // check for NULL object
   __ null_check(rax);
 
-  __ resolve_for_write(IS_NOT_NULL, rax);
+  __ resolve(IS_NOT_NULL, rax);
 
   const Address monitor_block_top(
         rbp, frame::interpreter_frame_monitor_block_top_offset * wordSize);

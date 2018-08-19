@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2018, Red Hat, Inc. and/or its affiliates.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -18,23 +19,24 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHSATBMARKQUEUEFILTER_HPP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHSATBMARKQUEUEFILTER_HPP
+/*
+ * @test
+ * @bug 8207355
+ * @compile TestLinearScanOrder.jasm
+ * @run main/othervm -Xcomp -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+ *                   -XX:CompileCommand=compileonly,compiler.c1.TestLinearScanOrder::test
+ *                   compiler.c1.TestLinearScanOrderMain
+ */
 
-#include "gc/g1/satbMarkQueue.hpp"
+package compiler.c1;
 
-class ShenandoahHeap;
-
-class ShenandoahSATBMarkQueueFilter : public SATBMarkQueueFilter {
-  ShenandoahHeap* _heap;
-
-public:
-  ShenandoahSATBMarkQueueFilter(ShenandoahHeap* heap);
-
-  virtual void filter(SATBMarkQueue* queue);
-};
-
-#endif // SHARE_GC_SHENANDOAH_SHENANDOAHSATBMARKQUEUEFILTER_HPP
+// WARNING: This test will not fail but time out in C1's ComputeLinearScanOrder phase
+public class TestLinearScanOrderMain {
+    public static void main(String[] args) {
+        if (TestLinearScanOrder.test() != 42) {
+            throw new RuntimeException("Test failed");
+        }
+    }
+}

@@ -628,25 +628,25 @@ void ShenandoahBarrierSetAssembler::tlab_allocate(MacroAssembler* masm,
   __ verify_tlab();
 }
 
-void ShenandoahBarrierSetAssembler::resolve_for_read(MacroAssembler* masm, DecoratorSet decorators, Register obj) {
+void ShenandoahBarrierSetAssembler::resolve(MacroAssembler* masm, DecoratorSet decorators, Register obj) {
   bool oop_not_null = (decorators & IS_NOT_NULL) != 0;
-  if (oop_not_null) {
-    read_barrier_not_null(masm, obj);
+  bool is_write = (decorators & ACCESS_WRITE) != 0;
+  if (is_write) {
+    if (oop_not_null) {
+      write_barrier(masm, obj);
+    } else {
+      Label done;
+      __ testptr(obj, obj);
+      __ jcc(Assembler::zero, done);
+      write_barrier(masm, obj);
+      __ bind(done);
+    }
   } else {
-    read_barrier(masm, obj);
-  }
-}
-
-void ShenandoahBarrierSetAssembler::resolve_for_write(MacroAssembler* masm, DecoratorSet decorators, Register obj) {
-  bool oop_not_null = (decorators & IS_NOT_NULL) != 0;
-  if (oop_not_null) {
-    write_barrier(masm, obj);
-  } else {
-    Label done;
-    __ testptr(obj, obj);
-    __ jcc(Assembler::zero, done);
-    write_barrier(masm, obj);
-    __ bind(done);
+    if (oop_not_null) {
+      read_barrier_not_null(masm, obj);
+    } else {
+      read_barrier(masm, obj);
+    }
   }
 }
 

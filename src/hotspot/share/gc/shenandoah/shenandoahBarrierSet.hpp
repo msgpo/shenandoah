@@ -38,9 +38,8 @@ private:
     WRITE_BARRIER
   };
 
-  static ShenandoahSATBMarkQueueSet _satb_mark_queue_set;
-
   ShenandoahHeap* _heap;
+  ShenandoahSATBMarkQueueSet _satb_mark_queue_set;
 
 public:
 
@@ -50,8 +49,8 @@ public:
     return barrier_set_cast<ShenandoahBarrierSet>(BarrierSet::barrier_set());
   }
 
-  static SATBMarkQueueSet& satb_mark_queue_set() {
-    return _satb_mark_queue_set;
+  static ShenandoahSATBMarkQueueSet& satb_mark_queue_set() {
+    return barrier_set()->_satb_mark_queue_set;
   }
 
   void print_on(outputStream* st) const;

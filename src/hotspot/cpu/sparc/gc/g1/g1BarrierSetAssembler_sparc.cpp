@@ -28,6 +28,7 @@
 #include "gc/g1/g1BarrierSetAssembler.hpp"
 #include "gc/g1/g1BarrierSetRuntime.hpp"
 #include "gc/g1/g1CardTable.hpp"
+#include "gc/g1/g1SATBMarkQueueSet.hpp"
 #include "gc/g1/g1ThreadLocalData.hpp"
 #include "gc/g1/heapRegion.hpp"
 #include "interpreter/interp_masm.hpp"
@@ -607,7 +608,7 @@ void G1BarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAssembler* 
   __ call_VM_leaf(L7_thread_cache,
                   CAST_FROM_FN_PTR(address,
                                    G1SATBMarkQueueSet::handle_zero_index_for_thread),
-                                   G2_thread);
+                  G2_thread);
 
   __ restore_live_registers(true);
 
@@ -694,7 +695,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
   __ call_VM_leaf(L7_thread_cache,
                   CAST_FROM_FN_PTR(address,
                                    DirtyCardQueueSet::handle_zero_index_for_thread),
-                                   G2_thread);
+                  G2_thread);
 
   __ restore_live_registers(true);
 

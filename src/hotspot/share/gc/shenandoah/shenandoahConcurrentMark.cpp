@@ -372,8 +372,6 @@ void ShenandoahConcurrentMark::initialize(uint workers) {
     _task_queues->register_queue(i, task_queue);
   }
 
-  ShenandoahBarrierSet::satb_mark_queue_set().set_buffer_size(ShenandoahSATBBufferSize);
-
   size_t num_regions = ShenandoahHeap::heap()->num_regions();
   _liveness_local = NEW_C_HEAP_ARRAY(jushort*, workers, mtGC);
   for (uint worker = 0; worker < workers; worker++) {

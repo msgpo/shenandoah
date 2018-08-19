@@ -27,8 +27,19 @@
 #include "gc/g1/satbMarkQueue.hpp"
 
 class ShenandoahSATBMarkQueueSet : public SATBMarkQueueSet {
+private:
+  ShenandoahHeap* _heap;
 public:
-  virtual SATBMarkQueue& satb_queue_for_thread(Thread* t);
+  ShenandoahSATBMarkQueueSet();
+
+  void initialize(ShenandoahHeap* const heap,
+                  Monitor* cbl_mon, Mutex* fl_lock,
+                  int process_completed_threshold,
+                  uint buffer_enqueue_threshold_percentage,
+                  Mutex* lock);
+
+  virtual SATBMarkQueue& satb_queue_for_thread(JavaThread* const t) const;
+  virtual void filter(SATBMarkQueue* queue);
 };
 
 #endif

@@ -43,8 +43,6 @@
 class ShenandoahBarrierSetC1;
 class ShenandoahBarrierSetC2;
 
-ShenandoahSATBMarkQueueSet ShenandoahBarrierSet::_satb_mark_queue_set;
-
 template <bool UPDATE_MATRIX, bool STOREVAL_WRITE_BARRIER>
 class ShenandoahUpdateRefsForOopClosure: public BasicOopIterateClosure {
 private:
@@ -80,7 +78,8 @@ ShenandoahBarrierSet::ShenandoahBarrierSet(ShenandoahHeap* heap) :
              make_barrier_set_c1<ShenandoahBarrierSetC1>(),
              make_barrier_set_c2<ShenandoahBarrierSetC2>(),
              BarrierSet::FakeRtti(BarrierSet::Shenandoah)),
-  _heap(heap)
+  _heap(heap),
+  _satb_mark_queue_set()
 {
 }
 

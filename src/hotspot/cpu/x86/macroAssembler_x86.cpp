@@ -6275,16 +6275,6 @@ void MacroAssembler::store_klass(Register dst, Register src) {
     movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
 }
 
-void MacroAssembler::resolve_for_read(DecoratorSet decorators, Register obj) {
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->resolve_for_read(this, decorators, obj);
-}
-
-void MacroAssembler::resolve_for_write(DecoratorSet decorators, Register obj) {
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->resolve_for_write(this, decorators, obj);
-}
-
 void MacroAssembler::access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
                                     Register tmp1, Register thread_tmp) {
   BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
@@ -6307,6 +6297,15 @@ void MacroAssembler::access_store_at(BasicType type, DecoratorSet decorators, Ad
   } else {
     bs->store_at(this, decorators, type, dst, src, tmp1, tmp2);
   }
+}
+
+void MacroAssembler::resolve(DecoratorSet decorators, Register obj) {
+  // Use stronger ACCESS_WRITE|ACCESS_READ by default.
+  if ((decorators & (ACCESS_READ | ACCESS_WRITE)) == 0) {
+    decorators |= ACCESS_READ | ACCESS_WRITE;
+  }
+  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
+  return bs->resolve(this, decorators, obj);
 }
 
 void MacroAssembler::load_heap_oop(Register dst, Address src, Register tmp1,
@@ -10580,7 +10579,7 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
   XMMRegister tmp1Reg, XMMRegister tmp2Reg,
   XMMRegister tmp3Reg, XMMRegister tmp4Reg,
   Register tmp5, Register result) {
-  Label copy_chars_loop, return_length, return_zero, done, below_threshold;
+  Label copy_chars_loop, return_length, return_zero, done;
 
   // rsi: src
   // rdi: dst
@@ -10603,13 +10602,12 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
 
     set_vector_masking();  // opening of the stub context for programming mask registers
 
-    Label copy_32_loop, copy_loop_tail, restore_k1_return_zero;
+    Label copy_32_loop, copy_loop_tail, restore_k1_return_zero, below_threshold;
 
-    // alignement
-    Label post_alignement;
+    // alignment
+    Label post_alignment;
 
-    // if length of the string is less than 16, handle it in an old fashioned
-    // way
+    // if length of the string is less than 16, handle it in an old fashioned way
     testl(len, -32);
     jcc(Assembler::zero, below_threshold);
 
@@ -10622,7 +10620,7 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
     kmovql(k3, k1);
 
     testl(len, -64);
-    jcc(Assembler::zero, post_alignement);
+    jcc(Assembler::zero, post_alignment);
 
     movl(tmp5, dst);
     andl(tmp5, (32 - 1));
@@ -10631,7 +10629,7 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
 
     // bail out when there is nothing to be done
     testl(tmp5, 0xFFFFFFFF);
-    jcc(Assembler::zero, post_alignement);
+    jcc(Assembler::zero, post_alignment);
 
     // ~(~0 << len), where len is the # of remaining elements to process
     movl(result, 0xFFFFFFFF);
@@ -10651,8 +10649,8 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
     addptr(dst, tmp5);
     subl(len, tmp5);
 
-    bind(post_alignement);
-    // end of alignement
+    bind(post_alignment);
+    // end of alignment
 
     movl(tmp5, len);
     andl(tmp5, (32 - 1));    // tail count (in chars)
@@ -10707,11 +10705,12 @@ void MacroAssembler::char_array_compress(Register src, Register dst, Register le
     jmp(return_zero);
 
     clear_vector_masking();   // closing of the stub context for programming mask registers
-  }
-  if (UseSSE42Intrinsics) {
-    Label copy_32_loop, copy_16, copy_tail;
 
     bind(below_threshold);
+  }
+
+  if (UseSSE42Intrinsics) {
+    Label copy_32_loop, copy_16, copy_tail;
 
     movl(result, len);
 
@@ -10825,8 +10824,7 @@ void MacroAssembler::byte_array_inflate(Register src, Register dst, Register len
     Label copy_32_loop, copy_tail;
     Register tmp3_aliased = len;
 
-    // if length of the string is less than 16, handle it in an old fashioned
-    // way
+    // if length of the string is less than 16, handle it in an old fashioned way
     testl(len, -16);
     jcc(Assembler::zero, below_threshold);
 
@@ -10940,7 +10938,10 @@ void MacroAssembler::byte_array_inflate(Register src, Register dst, Register len
     addptr(dst, 8);
 
     bind(copy_bytes);
+  } else {
+    bind(below_threshold);
   }
+
   testl(len, len);
   jccb(Assembler::zero, done);
   lea(src, Address(src, len, Address::times_1));

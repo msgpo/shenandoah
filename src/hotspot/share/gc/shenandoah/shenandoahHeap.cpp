@@ -52,7 +52,6 @@
 #include "gc/shenandoah/shenandoahPacer.hpp"
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.hpp"
-#include "gc/shenandoah/shenandoahSATBMarkQueueFilter.hpp"
 #include "gc/shenandoah/shenandoahStringDedup.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
@@ -159,7 +158,6 @@ jint ShenandoahHeap::initialize() {
                                                  heap_alignment);
   initialize_reserved_region((HeapWord*)heap_rs.base(), (HeapWord*) (heap_rs.base() + heap_rs.size()));
 
-  BarrierSet::set_barrier_set(new ShenandoahBarrierSet(this));
   ReservedSpace pgc_rs = heap_rs.first_part(max_byte_size);
 
   _num_regions = ShenandoahHeapRegion::region_count();
@@ -190,13 +188,15 @@ jint ShenandoahHeap::initialize() {
   assert((((size_t) base()) & ShenandoahHeapRegion::region_size_bytes_mask()) == 0,
          "misaligned heap: "PTR_FORMAT, p2i(base()));
 
+  ShenandoahBarrierSet::satb_mark_queue_set().set_buffer_size(ShenandoahSATBBufferSize);
+
   // The call below uses stuff (the SATB* things) that are in G1, but probably
   // belong into a shared location.
-  ShenandoahSATBMarkQueueFilter* satb_filter = new ShenandoahSATBMarkQueueFilter(this);
-  ShenandoahBarrierSet::satb_mark_queue_set().initialize(satb_filter,
+  ShenandoahBarrierSet::satb_mark_queue_set().initialize(this,
                                                SATB_Q_CBL_mon,
                                                SATB_Q_FL_lock,
                                                20 /*G1SATBProcessCompletedThreshold */,
+                                               60 /* G1SATBBufferEnqueueingThresholdPercent */,
                                                Shared_SATB_Q_lock);
 
   // Reserve space for prev and next bitmap.
@@ -426,6 +426,8 @@ ShenandoahHeap::ShenandoahHeap(ShenandoahCollectorPolicy* policy) :
   _used_at_last_gc(0) {
   log_info(gc, init)("GC threads: " UINT32_FORMAT " parallel, " UINT32_FORMAT " concurrent", ParallelGCThreads, ConcGCThreads);
   log_info(gc, init)("Reference processing: %s", ParallelRefProcEnabled ? "parallel" : "serial");
+
+  BarrierSet::set_barrier_set(new ShenandoahBarrierSet(this));
 
   _max_workers = MAX2(_max_workers, 1U);
   _workers = new ShenandoahWorkGang("Shenandoah GC Threads", _max_workers,
@@ -2217,7 +2219,8 @@ void ShenandoahHeap::unload_classes_and_cleanup_tables(bool full_gc) {
   {
     ShenandoahGCPhase phase(phase_par);
     uint active = _workers->active_workers();
-    ParallelCleaningTask unlink_task(is_alive, true, true, active, purged_class);
+    StringDedupUnlinkOrOopsDoClosure dedup_cl(is_alive, NULL);
+    ParallelCleaningTask unlink_task(is_alive, &dedup_cl, active, purged_class);
     _workers->run_task(&unlink_task);
 
     ShenandoahPhaseTimings* p = phase_timings();

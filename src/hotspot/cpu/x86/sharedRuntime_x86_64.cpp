@@ -1634,12 +1634,12 @@ class ComputeMoveOrder: public StackObj {
    public:
     MoveOperation(int src_index, VMRegPair src, int dst_index, VMRegPair dst):
       _src(src)
-    , _src_index(src_index)
     , _dst(dst)
+    , _src_index(src_index)
     , _dst_index(dst_index)
+    , _processed(false)
     , _next(NULL)
-    , _prev(NULL)
-    , _processed(false) {
+    , _prev(NULL) {
     }
 
     VMRegPair src() const              { return _src; }
@@ -2451,7 +2451,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
     // Load the oop from the handle
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
 
-    __ resolve_for_write(IS_NOT_NULL, obj_reg);
+    __ resolve(IS_NOT_NULL, obj_reg);
     if (UseBiasedLocking) {
       __ biased_locking_enter(lock_reg, obj_reg, swap_reg, rscratch1, false, lock_done, &slow_path_lock);
     }
@@ -2637,7 +2637,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
     // Get locked oop from the handle we passed to jni
     __ movptr(obj_reg, Address(oop_handle_reg, 0));
-    __ resolve_for_write(IS_NOT_NULL, obj_reg);
+    __ resolve(IS_NOT_NULL, obj_reg);
 
     Label done;
 
