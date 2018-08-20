@@ -230,14 +230,6 @@ void BarrierSetAssembler::incr_allocated_bytes(MacroAssembler* masm,
   __ str(t1, Address(rthread, in_bytes(JavaThread::allocated_bytes_offset())));
 }
 
-void BarrierSetAssembler::resolve_for_read(MacroAssembler* masm, DecoratorSet decorators, Register obj) {
-  // Default to no-op.
-}
-
-void BarrierSetAssembler::resolve_for_write(MacroAssembler* masm, DecoratorSet decorators, Register obj) {
-  // Default to no-op.
-}
-
 void BarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
                                       bool acquire, bool release, bool weak, bool encode,
                                       Register tmp1, Register tmp2, Register tmp3,

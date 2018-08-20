@@ -3984,16 +3984,6 @@ void  MacroAssembler::set_narrow_klass(Register dst, Klass* k) {
   movk(dst, nk & 0xffff);
 }
 
-void MacroAssembler::resolve_for_read(DecoratorSet decorators, Register obj) {
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->resolve_for_read(this, decorators, obj);
-}
-
-void MacroAssembler::resolve_for_write(DecoratorSet decorators, Register obj) {
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->resolve_for_write(this, decorators, obj);
-}
-
 void MacroAssembler::access_load_at(BasicType type, DecoratorSet decorators,
                                     Register dst, Address src,
                                     Register tmp1, Register thread_tmp) {

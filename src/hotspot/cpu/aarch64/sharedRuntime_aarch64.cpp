@@ -2002,7 +2002,6 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
 
     // Get locked oop from the handle we passed to jni
     __ ldr(obj_reg, Address(oop_handle_reg, 0));
-    __ resolve_for_write(0, obj_reg);
 
     __ resolve(IS_NOT_NULL, obj_reg);
 

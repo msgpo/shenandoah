@@ -2166,8 +2166,8 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
   Register length  = op->length()->as_register();
   Register tmp = op->tmp()->as_register();
 
-  __ resolve_for_read(IN_HEAP, src);
-  __ resolve_for_write(IN_HEAP, dst);
+  __ resolve(IN_HEAP | ACCESS_READ, src);
+  __ resolve(IN_HEAP | ACCESS_WRITE, dst);
 
   CodeStub* stub = op->stub();
   int flags = op->flags();

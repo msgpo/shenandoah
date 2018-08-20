@@ -97,9 +97,6 @@ public:
                              Register t2,
                              Label& slow_case);
 
-  virtual void resolve_for_read(MacroAssembler* masm, DecoratorSet decorators, Register obj);
-  virtual void resolve_for_write(MacroAssembler* masm, DecoratorSet decorators, Register obj);
-
   virtual void cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
                            bool acquire, bool release, bool weak, bool encode,
                            Register tmp1, Register tmp2, Register tmp3,
