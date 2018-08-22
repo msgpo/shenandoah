@@ -3023,8 +3023,8 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
   Register length  = op->length()->as_register();
   Register tmp = op->tmp()->as_register();
 
-  __ resolve(IN_HEAP | ACCESS_READ, src);
-  __ resolve(IN_HEAP | ACCESS_WRITE, dst);
+  __ resolve(ACCESS_READ, src);
+  __ resolve(ACCESS_WRITE, dst);
 
   CodeStub* stub = op->stub();
   int flags = op->flags();
@@ -3464,7 +3464,7 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
       scratch = op->scratch_opr()->as_register();
     }
     assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");
-    __ resolve(IN_HEAP | ACCESS_WRITE, obj);
+    __ resolve(ACCESS_READ | ACCESS_WRITE, obj);
     // add debug info for NullPointerException only if one is possible
     int null_check_offset = __ lock_object(hdr, obj, lock, scratch, *op->stub()->entry());
     if (op->info() != NULL) {

@@ -24,7 +24,7 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHSATBMARKQUEUESET_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHSATBMARKQUEUESET_HPP
 
-#include "gc/g1/satbMarkQueue.hpp"
+#include "gc/shared/satbMarkQueue.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
 
 class ShenandoahSATBMarkQueueSet : public SATBMarkQueueSet {

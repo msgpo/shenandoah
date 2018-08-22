@@ -24,8 +24,8 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHTHREADLOCALDATA_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHTHREADLOCALDATA_HPP
 
-#include "gc/g1/satbMarkQueue.hpp"
 #include "gc/shared/plab.hpp"
+#include "gc/shared/satbMarkQueue.hpp"
 #include "gc/shenandoah/brooksPointer.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "runtime/thread.hpp"

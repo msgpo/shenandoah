@@ -22,7 +22,7 @@
  */
 
 #include "c1/c1_IR.hpp"
-#include "gc/g1/satbMarkQueue.hpp"
+#include "gc/shared/satbMarkQueue.hpp"
 #include "gc/shenandoah/brooksPointer.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
 #include "gc/shenandoah/shenandoahConnectionMatrix.hpp"
