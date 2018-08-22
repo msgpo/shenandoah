@@ -709,9 +709,6 @@ void ShenandoahHeap::op_uncommit(double shrink_before) {
                  count * ShenandoahHeapRegion::region_size_bytes() / M, capacity() / M, committed() / M, used() / M);
     control_thread()->notify_heap_changed();
   }
-
-  // Allocations happen during uncommits, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 HeapWord* ShenandoahHeap::allocate_from_gclab_slow(Thread* thread, size_t size) {
@@ -1164,9 +1161,6 @@ void ShenandoahHeap::prepare_for_concurrent_evacuation() {
   log_develop_trace(gc)("Thread %d started prepare_for_concurrent_evacuation", Thread::current()->osthread()->thread_id());
 
   if (!cancelled_gc()) {
-    // Allocations might have happened before we STWed here, record peak:
-    heuristics()->record_peak_occupancy();
-
     make_parsable(true);
 
     if (ShenandoahVerify) {
@@ -1663,9 +1657,6 @@ void ShenandoahHeap::op_init_mark() {
 
 void ShenandoahHeap::op_mark() {
   concurrentMark()->mark_from_roots();
-
-  // Allocations happen during concurrent mark, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 void ShenandoahHeap::op_final_mark() {
@@ -1783,24 +1774,15 @@ void ShenandoahHeap::op_evac() {
     ls.print_cr("All regions after evacuation:");
     print_heap_regions_on(&ls);
   }
-
-  // Allocations happen during evacuation, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 void ShenandoahHeap::op_updaterefs() {
   update_heap_references(true);
-
-  // Allocations happen during update-refs, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 void ShenandoahHeap::op_cleanup() {
   ShenandoahGCPhase phase_recycle(ShenandoahPhaseTimings::conc_cleanup_recycle);
   free_set()->recycle_trash();
-
-  // Allocations happen during cleanup, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 void ShenandoahHeap::op_cleanup_bitmaps() {
@@ -1808,9 +1790,6 @@ void ShenandoahHeap::op_cleanup_bitmaps() {
 
   ShenandoahGCPhase phase_reset(ShenandoahPhaseTimings::conc_cleanup_reset_bitmaps);
   reset_next_mark_bitmap();
-
-  // Allocations happen during bitmap cleanup, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 void ShenandoahHeap::op_cleanup_traversal() {
@@ -1821,16 +1800,10 @@ void ShenandoahHeap::op_cleanup_traversal() {
   }
 
   op_cleanup();
-
-  // Allocations happen during bitmap cleanup, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 void ShenandoahHeap::op_preclean() {
   concurrentMark()->preclean_weak_refs();
-
-  // Allocations happen during concurrent preclean, record peak after the phase:
-  heuristics()->record_peak_occupancy();
 }
 
 void ShenandoahHeap::op_init_traversal() {
@@ -2507,9 +2480,6 @@ void ShenandoahHeap::op_final_updaterefs() {
   assert(!cancelled_gc(), "Should have been done right before");
 
   concurrentMark()->update_roots(ShenandoahPhaseTimings::final_update_refs_roots);
-
-  // Allocations might have happened before we STWed here, record peak:
-  heuristics()->record_peak_occupancy();
 
   ShenandoahGCPhase final_update_refs(ShenandoahPhaseTimings::final_update_refs_recycle);
 
