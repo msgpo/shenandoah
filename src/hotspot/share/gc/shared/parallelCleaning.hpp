@@ -119,35 +119,22 @@ public:
   void work();
 };
 
-class ResolvedMethodCleaningTask : public StackObj {
-  volatile int       _resolved_method_task_claimed;
-public:
-  ResolvedMethodCleaningTask() :
-      _resolved_method_task_claimed(0) {}
-
-  bool claim_resolved_method_task();
-
-  void work();
-};
-
 class ParallelCleaningTimes {
   friend class ParallelCleaningTask;
 private:
   // All times are in microseconds, making room for ~2 hrs in jint
-  jint _sync, _codecache_work, _tables_work, _rmt_work, _klass_work;
+  jint _sync, _codecache_work, _tables_work, _klass_work;
 
 public:
   ParallelCleaningTimes() :
           _sync(0),
           _codecache_work(0),
           _tables_work(0),
-          _rmt_work(0),
           _klass_work(0) {};
 
   jint sync_us()           const { return _sync; }
   jint codecache_work_us() const { return _codecache_work; }
   jint tables_work_us()    const { return _tables_work; }
-  jint rmt_work_us()       const { return _rmt_work; }
   jint klass_work_us()     const { return _klass_work; }
 };
 
@@ -159,7 +146,6 @@ private:
   StringCleaningTask          _string_task;
   CodeCacheUnloadingTask      _code_cache_task;
   KlassCleaningTask           _klass_cleaning_task;
-  ResolvedMethodCleaningTask  _resolved_method_cleaning_task;
 
 public:
   // The constructor is run in the VMThread.

@@ -145,7 +145,6 @@ void ShenandoahPhaseTimings::init_phase_names() {
   _phase_names[purge_par]                       = "    Parallel Cleanup";
   _phase_names[purge_par_codecache]             = "      Code Cache";
   _phase_names[purge_par_symbstring]            = "      String/Symbol Tables";
-  _phase_names[purge_par_rmt]                   = "      Resolved Methods";
   _phase_names[purge_par_classes]               = "      Clean Classes";
   _phase_names[purge_par_sync]                  = "      Synchronization";
   _phase_names[purge_string_dedup]              = "    String Dedup";
@@ -242,7 +241,6 @@ void ShenandoahPhaseTimings::init_phase_names() {
   _phase_names[full_gc_purge_par]               = "    Parallel Cleanup";
   _phase_names[full_gc_purge_par_codecache]     = "      Code Cache";
   _phase_names[full_gc_purge_par_symbstring]    = "      String/Symbol Tables";
-  _phase_names[full_gc_purge_par_rmt]           = "      Resolved Methods";
   _phase_names[full_gc_purge_par_classes]       = "      Clean Classes";
   _phase_names[full_gc_purge_par_sync]          = "      Synchronization";
   _phase_names[full_gc_purge_cldg]              = "    CLDG";

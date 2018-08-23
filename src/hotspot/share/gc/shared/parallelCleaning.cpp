@@ -28,7 +28,6 @@
 #include "code/codeCache.hpp"
 #include "gc/shared/parallelCleaning.hpp"
 #include "memory/resourceArea.hpp"
-#include "prims/resolvedMethodTable.hpp"
 #include "logging/log.hpp"
 
 StringCleaningTask::StringCleaningTask(BoolObjectClosure* is_alive,
@@ -252,20 +251,6 @@ void KlassCleaningTask::work() {
   }
 }
 
-bool ResolvedMethodCleaningTask::claim_resolved_method_task() {
-  if (_resolved_method_task_claimed) {
-    return false;
-  }
-  return Atomic::cmpxchg(1, &_resolved_method_task_claimed, 0) == 0;
-}
-
-// These aren't big, one thread can do it all.
-void ResolvedMethodCleaningTask::work() {
-  if (claim_resolved_method_task()) {
-    ResolvedMethodTable::unlink();
-  }
-}
-
 class ParallelCleaningTaskTimer {
   volatile jint* _timer_us;
   jlong start;
@@ -288,8 +273,7 @@ ParallelCleaningTask::ParallelCleaningTask(BoolObjectClosure* is_alive,
   _unloading_occurred(unloading_occurred),
   _string_task(is_alive, dedup_closure, true, StringDedup::is_enabled()),
   _code_cache_task(num_workers, is_alive, unloading_occurred),
-  _klass_cleaning_task(),
-  _resolved_method_cleaning_task() {
+  _klass_cleaning_task() {
 }
 
 // The parallel work done by all worker threads.
@@ -310,12 +294,6 @@ void ParallelCleaningTask::work(uint worker_id) {
     ParallelCleaningTaskTimer timer(&_times._tables_work);
     // Clean the Strings.
     _string_task.work(worker_id);
-  }
-
-  {
-    ParallelCleaningTaskTimer timer(&_times._rmt_work);
-    // Clean unreferenced things in the ResolvedMethodTable
-    _resolved_method_cleaning_task.work();
   }
 
   {

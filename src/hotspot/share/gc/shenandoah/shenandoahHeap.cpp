@@ -2163,11 +2163,6 @@ void ShenandoahHeap::unload_classes_and_cleanup_tables(bool full_gc) {
           ShenandoahPhaseTimings::full_gc_purge_par_codecache :
           ShenandoahPhaseTimings::purge_par_codecache;
 
-  ShenandoahPhaseTimings::Phase phase_par_rmt =
-          full_gc ?
-          ShenandoahPhaseTimings::full_gc_purge_par_rmt :
-          ShenandoahPhaseTimings::purge_par_rmt;
-
   ShenandoahPhaseTimings::Phase phase_par_symbstring =
           full_gc ?
           ShenandoahPhaseTimings::full_gc_purge_par_symbstring :
@@ -2206,7 +2201,6 @@ void ShenandoahHeap::unload_classes_and_cleanup_tables(bool full_gc) {
     // by active workers to get average time per worker, that would add up to wall time.
     p->record_phase_time(phase_par_classes,    times.klass_work_us() / active);
     p->record_phase_time(phase_par_codecache,  times.codecache_work_us() / active);
-    p->record_phase_time(phase_par_rmt,        times.rmt_work_us() / active);
     p->record_phase_time(phase_par_symbstring, times.tables_work_us() / active);
     p->record_phase_time(phase_par_sync,       times.sync_us() / active);
   }
