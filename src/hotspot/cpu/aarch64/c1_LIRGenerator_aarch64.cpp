@@ -943,7 +943,7 @@ void LIRGenerator::do_update_CRC32(Intrinsic* x) {
       }
 
       if (is_updateBytes) {
-        base_op = access_resolve_for_read(IN_HEAP, base_op, NULL);
+        base_op = access_resolve(ACCESS_READ, base_op);
       }
 
       if (offset) {
@@ -1022,6 +1022,10 @@ void LIRGenerator::do_update_CRC32C(Intrinsic* x) {
         LIR_Opr tmp = new_register(T_LONG);
         __ convert(Bytecodes::_i2l, index, tmp);
         index = tmp;
+      }
+
+      if (is_updateBytes) {
+        base_op = access_resolve(ACCESS_READ, base_op);
       }
 
       if (offset) {

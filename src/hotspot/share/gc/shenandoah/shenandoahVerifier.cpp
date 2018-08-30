@@ -86,7 +86,7 @@ private:
       // host object and field value, regardless.
 
       HeapWord* addr = (HeapWord*) obj;
-      if (_map->parMark(addr)) {
+      if (_map->par_mark(addr)) {
         verify_oop_at(p, obj);
         _stack->push(ShenandoahVerifierTask(obj));
       } else {
@@ -569,13 +569,13 @@ public:
     // Bitmaps, before TAMS
     if (tams > r->bottom()) {
       HeapWord* start = r->bottom() + BrooksPointer::word_size();
-      HeapWord* addr = mark_bit_map->getNextMarkedWordAddress(start, tams);
+      HeapWord* addr = mark_bit_map->get_next_marked_addr(start, tams);
 
       while (addr < tams) {
         verify_and_follow(addr, stack, cl, &processed);
         addr += BrooksPointer::word_size();
         if (addr < tams) {
-          addr = mark_bit_map->getNextMarkedWordAddress(addr, tams);
+          addr = mark_bit_map->get_next_marked_addr(addr, tams);
         }
       }
     }
@@ -595,7 +595,7 @@ public:
   }
 
   void verify_and_follow(HeapWord *addr, ShenandoahVerifierStack &stack, ShenandoahVerifyOopClosure &cl, size_t *processed) {
-    if (!_bitmap->parMark(addr)) return;
+    if (!_bitmap->par_mark(addr)) return;
 
     // Verify the object itself:
     oop obj = oop(addr);
@@ -704,7 +704,7 @@ void ShenandoahVerifier::verify_at_safepoint(const char *label,
   _heap->make_parsable(false);
 
   // Allocate temporary bitmap for storing marking wavefront:
-  MemRegion mr = MemRegion(_verification_bit_map->startWord(), _verification_bit_map->endWord());
+  MemRegion mr = _verification_bit_map->covered();
   _verification_bit_map->clear_range_large(mr);
 
   // Allocate temporary array for storing liveness data

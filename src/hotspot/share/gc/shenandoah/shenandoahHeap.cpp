@@ -1466,7 +1466,7 @@ private:
       oop obj = CompressedOops::decode_not_null(o);
       obj = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
       assert(oopDesc::is_oop(obj), "must be a valid oop");
-      if (!_bitmap->isMarked((HeapWord*) obj)) {
+      if (!_bitmap->is_marked((HeapWord*) obj)) {
         _bitmap->mark((HeapWord*) obj);
         _oop_stack->push(obj);
       }
@@ -1512,7 +1512,7 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   }
 
   // Reset bitmap
-  MemRegion mr = MemRegion(_aux_bit_map.startWord(), _aux_bit_map.endWord());
+  MemRegion mr = _aux_bit_map.covered();
   _aux_bit_map.clear_range_large(mr);
 
   Stack<oop,mtGC> oop_stack;
@@ -2120,6 +2120,7 @@ void ShenandoahHeap::unload_classes_and_cleanup_tables(bool full_gc) {
     ParallelCleaningTask unlink_task(is_alive, &dedup_cl, active, purged_class);
     _workers->run_task(&unlink_task);
 
+    /*
     ShenandoahPhaseTimings* p = phase_timings();
     ParallelCleaningTimes times = unlink_task.times();
 
@@ -2129,6 +2130,7 @@ void ShenandoahHeap::unload_classes_and_cleanup_tables(bool full_gc) {
     p->record_phase_time(phase_par_codecache,  times.codecache_work_us() / active);
     p->record_phase_time(phase_par_symbstring, times.tables_work_us() / active);
     p->record_phase_time(phase_par_sync,       times.sync_us() / active);
+    */
   }
 
   if (ShenandoahStringDedup::is_enabled()) {

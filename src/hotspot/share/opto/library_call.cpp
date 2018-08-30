@@ -1139,7 +1139,7 @@ bool LibraryCallKit::inline_string_equals(StrIntrinsicNode::ArgEnc ae) {
     arg1 = access_resolve_for_read(arg1);
     arg2 = access_resolve_for_read(arg2);
 
-   // Get start addr and length of first argument
+    // Get start addr and length of first argument
     Node* arg1_start  = array_element_address(arg1, intcon(0), T_BYTE);
     Node* arg1_cnt    = load_array_length(arg1);
 
@@ -3100,7 +3100,7 @@ Node* LibraryCallKit::load_mirror_from_klass(Node* klass) {
   Node* p = basic_plus_adr(klass, in_bytes(Klass::java_mirror_offset()));
   Node* load = make_load(NULL, p, TypeRawPtr::NOTNULL, T_ADDRESS, MemNode::unordered);
   // mirror = ((OopHandle)mirror)->resolve();
-  return make_load(NULL, load, TypeInstPtr::MIRROR, T_OBJECT, MemNode::unordered);
+  return access_load(load, TypeInstPtr::MIRROR, T_OBJECT, IN_NATIVE);
 }
 
 //-----------------------load_klass_from_mirror_common-------------------------
@@ -4478,7 +4478,8 @@ bool LibraryCallKit::inline_native_clone(bool is_virtual) {
     if (!stopped()) {
       PreserveJVMState pjvms(this);
       CallJavaNode* slow_call = generate_method_call(vmIntrinsics::_clone, is_virtual);
-      Node* slow_result = set_results_for_java_call(slow_call);
+      // We need to deoptimize on exception (see comment above)
+      Node* slow_result = set_results_for_java_call(slow_call, false, /* deoptimize */ true);
       // this->control() comes from set_results_for_java_call
       result_reg->init_req(_slow_path, control());
       result_val->init_req(_slow_path, slow_result);
@@ -5564,8 +5565,8 @@ bool LibraryCallKit::inline_updateBytesCRC32C() {
   }
 
   // 'src_start' points to src array + scaled offset
-  src = access_resolve_for_read(src);
   src = must_be_not_null(src, true);
+  src = access_resolve_for_read(src);
   Node* src_start = array_element_address(src, offset, src_elem);
 
   // static final int[] byteTable in class CRC32C
@@ -5946,7 +5947,6 @@ bool LibraryCallKit::inline_cipherBlockChaining_AESCrypt(vmIntrinsics::ID id) {
   Node* len                        = argument(3);
   Node* dest                       = argument(4);
   Node* dest_offset                = argument(5);
-
 
   // inline_cipherBlockChaining_AESCrypt_predicate() has its own
   // barrier. This one should optimize away.

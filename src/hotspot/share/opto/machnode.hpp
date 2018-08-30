@@ -1003,7 +1003,7 @@ public:
 class MachMemBarNode : public MachNode {
   virtual uint size_of() const; // Size is bigger
 public:
-  const TypePtr* _adr_type;     // memory effects of call or return
+  const TypePtr* _adr_type;     // memory effects
   MachMemBarNode() : MachNode() {
     init_class_id(Class_MachMemBar);
     _adr_type = TypePtr::BOTTOM; // the default: all of memory

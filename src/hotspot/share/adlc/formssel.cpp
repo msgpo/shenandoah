@@ -4107,7 +4107,7 @@ bool MatchRule::is_ideal_membar() const {
     !strcmp(_opType,"MemBarVolatile") ||
     !strcmp(_opType,"MemBarCPUOrder") ||
     !strcmp(_opType,"MemBarStoreStore") ||
-    !strcmp(_opType, "OnSpinWait");
+    !strcmp(_opType,"OnSpinWait");
 }
 
 bool MatchRule::is_ideal_loadPC() const {

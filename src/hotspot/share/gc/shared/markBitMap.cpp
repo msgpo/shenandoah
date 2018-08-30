@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,30 +22,11 @@
  *
  */
 
-// Concurrent marking bit map wrapper
-
 #include "precompiled.hpp"
 #include "gc/shared/markBitMap.inline.hpp"
-#include "utilities/bitMap.inline.hpp"
+#include "memory/virtualspace.hpp"
 
-MarkBitMapRO::MarkBitMapRO(int shifter) :
-  _shifter(shifter),
-  _bm() {
-  _bmStartWord = 0;
-  _bmWordSize = 0;
-}
-
-#ifndef PRODUCT
-bool MarkBitMapRO::covers(MemRegion heap_rs) const {
-  // assert(_bm.map() == _virtual_space.low(), "map inconsistency");
-  assert(((size_t)_bm.size() * ((size_t)1 << _shifter)) == _bmWordSize,
-         "size inconsistency");
-  return _bmStartWord == (HeapWord*)(heap_rs.start()) &&
-         _bmWordSize  == heap_rs.word_size();
-}
-#endif
-
-void MarkBitMapRO::print_on_error(outputStream* st, const char* prefix) const {
+void MarkBitMap::print_on_error(outputStream* st, const char* prefix) const {
   _bm.print_on_error(st, prefix);
 }
 
@@ -57,34 +38,43 @@ size_t MarkBitMap::mark_distance() {
   return MinObjAlignmentInBytes * BitsPerByte;
 }
 
-void MarkBitMap::initialize(MemRegion heap, MemRegion bitmap) {
-  _bmStartWord = heap.start();
-  _bmWordSize = heap.word_size();
+void MarkBitMap::initialize(MemRegion heap, MemRegion storage) {
+  _covered = heap;
 
-  _bm = BitMapView((BitMap::bm_word_t*) bitmap.start(), _bmWordSize >> _shifter);
+  _bm = BitMapView((BitMap::bm_word_t*) storage.start(), _covered.word_size() >> _shifter);
 }
 
 void MarkBitMap::clear_range(MemRegion mr) {
-  mr.intersection(MemRegion(_bmStartWord, _bmWordSize));
-  assert(!mr.is_empty(), "unexpected empty region");
+  MemRegion intersection = mr.intersection(_covered);
+  assert(!intersection.is_empty(),
+         "Given range from " PTR_FORMAT " to " PTR_FORMAT " is completely outside the heap",
+         p2i(mr.start()), p2i(mr.end()));
   // convert address range into offset range
-  _bm.clear_range(heapWordToOffset(mr.start()),
-                  heapWordToOffset(mr.end()));
+  _bm.at_put_range(addr_to_offset(intersection.start()),
+                   addr_to_offset(intersection.end()), false);
 }
 
+#ifdef ASSERT
+void MarkBitMap::check_mark(HeapWord* addr) {
+  assert(Universe::heap()->is_in_reserved(addr),
+         "Trying to access bitmap " PTR_FORMAT " for address " PTR_FORMAT " not in the heap.",
+         p2i(this), p2i(addr));
+}
+#endif
+
 void MarkBitMap::clear_range_large(MemRegion mr) {
-  mr.intersection(MemRegion(_bmStartWord, _bmWordSize));
-  assert(!mr.is_empty(), "unexpected empty region");
+  MemRegion intersection = mr.intersection(_covered);
+  assert(!intersection.is_empty(), "unexpected empty region");
   // convert address range into offset range
-  _bm.clear_large_range(heapWordToOffset(mr.start()),
-                        heapWordToOffset(mr.end()));
+  _bm.clear_large_range(addr_to_offset(intersection.start()),
+                        addr_to_offset(intersection.end()));
 }
 
 void MarkBitMap::copy_from(MarkBitMap* other, MemRegion mr) {
-  guarantee(startWord() == other->startWord(), "bitmaps must cover same region");
-  guarantee(endWord() == other->endWord(), "bitmaps must cover same region");
-  mr.intersection(MemRegion(_bmStartWord, _bmWordSize));
-  size_t start_offset = heapWordToOffset(mr.start());
-  size_t end_offset = heapWordToOffset(mr.end());
+  guarantee(_covered.start() == other->_covered.start(), "bitmaps must cover same region");
+  guarantee(_covered.end() == other->_covered.end(), "bitmaps must cover same region");
+  MemRegion intersection = mr.intersection(_covered);
+  size_t start_offset = addr_to_offset(intersection.start());
+  size_t end_offset = addr_to_offset(intersection.end());
   _bm.copy_from(other->_bm, start_offset, end_offset);
 }

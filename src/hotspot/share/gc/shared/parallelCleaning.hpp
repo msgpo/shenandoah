@@ -33,26 +33,25 @@ class ParallelCleaningTask;
 
 class StringCleaningTask : public AbstractGangTask {
 private:
-  BoolObjectClosure* const                _is_alive;
-  StringDedupUnlinkOrOopsDoClosure* const _dedup_closure;
+  BoolObjectClosure* _is_alive;
+  StringDedupUnlinkOrOopsDoClosure * const _dedup_closure;
+
   OopStorage::ParState<false /* concurrent */, false /* const */> _par_state_string;
 
   int _initial_string_table_size;
 
-  bool  _process_strings;
-  volatile int _strings_processed;
-  volatile int _strings_removed;
+  bool            _process_strings;
+  volatile size_t _strings_processed;
+  volatile size_t _strings_removed;
 
-  bool _process_string_dedup;
 public:
-  StringCleaningTask(BoolObjectClosure* is_alive, StringDedupUnlinkOrOopsDoClosure* dedup_closure,
-                     bool process_strings, bool process_string_dedup);
+  StringCleaningTask(BoolObjectClosure* is_alive, StringDedupUnlinkOrOopsDoClosure* dedup_closure, bool process_strings);
   ~StringCleaningTask();
 
   void work(uint worker_id);
 
-  size_t strings_processed() const { return (size_t)_strings_processed; }
-  size_t strings_removed()   const { return (size_t)_strings_removed; }
+  size_t strings_processed() const { return _strings_processed; }
+  size_t strings_removed()   const { return _strings_removed; }
 };
 
 class CodeCacheUnloadingTask {
@@ -119,29 +118,9 @@ public:
   void work();
 };
 
-class ParallelCleaningTimes {
-  friend class ParallelCleaningTask;
-private:
-  // All times are in microseconds, making room for ~2 hrs in jint
-  jint _sync, _codecache_work, _tables_work, _klass_work;
-
-public:
-  ParallelCleaningTimes() :
-          _sync(0),
-          _codecache_work(0),
-          _tables_work(0),
-          _klass_work(0) {};
-
-  jint sync_us()           const { return _sync; }
-  jint codecache_work_us() const { return _codecache_work; }
-  jint tables_work_us()    const { return _tables_work; }
-  jint klass_work_us()     const { return _klass_work; }
-};
-
 // To minimize the remark pause times, the tasks below are done in parallel.
 class ParallelCleaningTask : public AbstractGangTask {
 private:
-  ParallelCleaningTimes       _times;
   bool                        _unloading_occurred;
   StringCleaningTask          _string_task;
   CodeCacheUnloadingTask      _code_cache_task;
@@ -153,10 +132,6 @@ public:
     uint num_workers, bool unloading_occurred);
 
   void work(uint worker_id);
-
-  ParallelCleaningTimes times() const {
-    return _times;
-  }
 };
 
 #endif // SHARE_VM_GC_SHARED_PARALLELCLEANING_HPP

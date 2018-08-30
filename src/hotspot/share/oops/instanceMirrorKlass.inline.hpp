@@ -48,7 +48,7 @@ void InstanceMirrorKlass::oop_oop_iterate(oop obj, OopClosureType* closure) {
   InstanceKlass::oop_oop_iterate<T>(obj, closure);
 
   if (Devirtualizer::do_metadata(closure)) {
-    Klass* klass = java_lang_Class::as_Klass(obj);
+    Klass* klass = java_lang_Class::as_Klass_raw(obj);
     // We'll get NULL for primitive mirrors.
     if (klass != NULL) {
       if (klass->is_instance_klass() &&
@@ -116,7 +116,7 @@ void InstanceMirrorKlass::oop_oop_iterate_bounded(oop obj, OopClosureType* closu
 
   if (Devirtualizer::do_metadata(closure)) {
     if (mr.contains(obj)) {
-      Klass* klass = java_lang_Class::as_Klass(obj);
+      Klass* klass = java_lang_Class::as_Klass_raw(obj);
       // We'll get NULL for primitive mirrors.
       if (klass != NULL) {
         Devirtualizer::do_klass(closure, klass);

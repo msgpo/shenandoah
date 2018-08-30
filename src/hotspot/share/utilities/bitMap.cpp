@@ -692,6 +692,11 @@ void BitMap::copy_from(BitMap& other, idx_t start_bit, idx_t end_bit) {
   Copy::conjoint_jbytes(other._map + start_word, _map + start_word, (end_word - start_word) * sizeof(bm_word_t));
 }
 
+void BitMap::write_to(bm_word_t* buffer, size_t buffer_size_in_bytes) const {
+  assert(buffer_size_in_bytes == size_in_bytes(), "must be");
+  memcpy(buffer, _map, size_in_bytes());
+}
+
 #ifndef PRODUCT
 
 void BitMap::print_on(outputStream* st) const {

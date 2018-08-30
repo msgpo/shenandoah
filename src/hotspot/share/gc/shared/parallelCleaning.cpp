@@ -30,15 +30,13 @@
 #include "memory/resourceArea.hpp"
 #include "logging/log.hpp"
 
-StringCleaningTask::StringCleaningTask(BoolObjectClosure* is_alive,
-  StringDedupUnlinkOrOopsDoClosure* dedup_closure,
-  bool process_strings, bool process_string_dedup) :
-  AbstractGangTask("String/Symbol Unlinking"),
+StringCleaningTask::StringCleaningTask(BoolObjectClosure* is_alive, StringDedupUnlinkOrOopsDoClosure* dedup_closure, bool process_strings) :
+  AbstractGangTask("String Unlinking"),
   _is_alive(is_alive),
   _dedup_closure(dedup_closure),
   _par_state_string(StringTable::weak_storage()),
-  _process_strings(process_strings), _strings_processed(0), _strings_removed(0),
-  _process_string_dedup(process_string_dedup) {
+  _initial_string_table_size((int) StringTable::the_table()->table_size()),
+  _process_strings(process_strings), _strings_processed(0), _strings_removed(0) {
 
   _initial_string_table_size = (int) StringTable::the_table()->table_size();
   if (process_strings) {
@@ -57,18 +55,17 @@ StringCleaningTask::~StringCleaningTask() {
 }
 
 void StringCleaningTask::work(uint worker_id) {
-  int strings_processed = 0;
-  int strings_removed = 0;
+  size_t strings_processed = 0;
+  size_t strings_removed = 0;
   if (_process_strings) {
     StringTable::possibly_parallel_unlink(&_par_state_string, _is_alive, &strings_processed, &strings_removed);
     Atomic::add(strings_processed, &_strings_processed);
     Atomic::add(strings_removed, &_strings_removed);
   }
-  if (_process_string_dedup) {
+  if (_dedup_closure != NULL) {
     StringDedup::parallel_unlink(_dedup_closure, worker_id);
   }
 }
-
 
 CodeCacheUnloadingTask::CodeCacheUnloadingTask(uint num_workers, BoolObjectClosure* is_alive, bool unloading_occurred) :
       _is_alive(is_alive),
@@ -103,7 +100,7 @@ void CodeCacheUnloadingTask::add_to_postponed_list(CompiledMethod* nm) {
   do {
     old = _postponed_list;
     nm->set_unloading_next(old);
-    } while (Atomic::cmpxchg(nm, &_postponed_list, old) != old);
+  } while (Atomic::cmpxchg(nm, &_postponed_list, old) != old);
 }
 
 void CodeCacheUnloadingTask::clean_nmethod(CompiledMethod* nm) {
@@ -212,7 +209,6 @@ void CodeCacheUnloadingTask::work_second_pass(uint worker_id) {
   }
 }
 
-
 KlassCleaningTask::KlassCleaningTask() :
   _clean_klass_tree_claimed(0),
   _klass_iterator() {
@@ -251,69 +247,37 @@ void KlassCleaningTask::work() {
   }
 }
 
-class ParallelCleaningTaskTimer {
-  volatile jint* _timer_us;
-  jlong start;
-public:
-  ParallelCleaningTaskTimer(jint* timer_us) : _timer_us(timer_us) {
-    start = os::javaTimeNanos();
-  }
-  ~ParallelCleaningTaskTimer() {
-    jlong ns = os::javaTimeNanos() - start;
-    jlong us = ns / 1000;
-    assert (us < max_jint, "overflow");
-    Atomic::add((jint) us, _timer_us);
-  }
-};
-
-
 ParallelCleaningTask::ParallelCleaningTask(BoolObjectClosure* is_alive,
   StringDedupUnlinkOrOopsDoClosure* dedup_closure, uint num_workers, bool unloading_occurred) :
   AbstractGangTask("Parallel Cleaning"),
   _unloading_occurred(unloading_occurred),
-  _string_task(is_alive, dedup_closure, true, StringDedup::is_enabled()),
+  _string_task(is_alive, StringDedup::is_enabled() ? dedup_closure : NULL, true),
   _code_cache_task(num_workers, is_alive, unloading_occurred),
   _klass_cleaning_task() {
 }
 
 // The parallel work done by all worker threads.
 void ParallelCleaningTask::work(uint worker_id) {
-  {
-    ParallelCleaningTaskTimer timer(&_times._codecache_work);
     // Do first pass of code cache cleaning.
     _code_cache_task.work_first_pass(worker_id);
-  }
 
-  {
-    ParallelCleaningTaskTimer timer(&_times._sync);
     // Let the threads mark that the first pass is done.
     _code_cache_task.barrier_mark(worker_id);
-  }
 
-  {
-    ParallelCleaningTaskTimer timer(&_times._tables_work);
-    // Clean the Strings.
+    // Clean the Strings and Symbols.
     _string_task.work(worker_id);
-  }
 
-  {
-    ParallelCleaningTaskTimer timer(&_times._sync);
     // Wait for all workers to finish the first code cache cleaning pass.
     _code_cache_task.barrier_wait(worker_id);
-  }
 
-  {
-    ParallelCleaningTaskTimer timer(&_times._codecache_work);
     // Do the second code cache cleaning work, which realize on
     // the liveness information gathered during the first pass.
     _code_cache_task.work_second_pass(worker_id);
-  }
 
   // Clean all klasses that were not unloaded.
   // The weak metadata in klass doesn't need to be
   // processed if there was no unloading.
   if (_unloading_occurred) {
-    ParallelCleaningTaskTimer timer(&_times._klass_work);
     _klass_cleaning_task.work();
   }
 }

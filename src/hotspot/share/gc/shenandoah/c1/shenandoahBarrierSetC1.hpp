@@ -123,17 +123,17 @@ private:
 
   void keep_alive_barrier(LIR_Opr val);
 
-  void pre_barrier(LIRAccess& access, LIR_Opr addr_opr, LIR_Opr pre_val);
-  void post_barrier(LIRAccess& access, LIR_OprDesc* addr, LIR_OprDesc* new_val);
+  void pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val);
+  void post_barrier(LIRGenerator* gen, LIR_OprDesc* addr, LIR_OprDesc* new_val);
 
-  LIR_Opr read_barrier(LIRAccess& access, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
-  LIR_Opr write_barrier(LIRAccess& access, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
-  LIR_Opr storeval_barrier(LIRAccess& access, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
+  LIR_Opr read_barrier(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
+  LIR_Opr write_barrier(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
+  LIR_Opr storeval_barrier(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, DecoratorSet decorators);
 
-  LIR_Opr read_barrier_impl(LIRAccess& access, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
-  LIR_Opr write_barrier_impl(LIRAccess& access, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
+  LIR_Opr read_barrier_impl(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
+  LIR_Opr write_barrier_impl(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
 
-  LIR_Opr ensure_in_register(LIRAccess& access, LIR_Opr obj);
+  LIR_Opr ensure_in_register(LIRGenerator* gen, LIR_Opr obj);
 public:
   CodeBlob* pre_barrier_c1_runtime_code_blob() { return _pre_barrier_c1_runtime_code_blob; }
 
@@ -145,8 +145,7 @@ public:
   virtual LIR_Opr atomic_xchg_at(LIRAccess& access, LIRItem& value);
   virtual LIR_Opr atomic_add_at(LIRAccess& access, LIRItem& value);
 
-  virtual LIR_Opr resolve_for_read(LIRAccess& access);
-  virtual LIR_Opr resolve_for_write(LIRAccess& access);
+  virtual LIR_Opr resolve(LIRGenerator* gen, DecoratorSet decorators, LIR_Opr obj);
 
   virtual void generate_c1_runtime_stubs(BufferBlob* buffer_blob);
 };

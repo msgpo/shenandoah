@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,94 +22,79 @@
  *
  */
 
-#ifndef SHARE_VM_GC_SHARED_CMBITMAP_HPP
-#define SHARE_VM_GC_SHARED_CMBITMAP_HPP
+#ifndef SHARE_VM_GC_SHARED_MARKBITMAP_HPP
+#define SHARE_VM_GC_SHARED_MARKBITMAP_HPP
 
 #include "memory/memRegion.hpp"
+#include "oops/oopsHierarchy.hpp"
 #include "utilities/bitMap.hpp"
-#include "utilities/globalDefinitions.hpp"
 
-// A generic CM bit map.  This is essentially a wrapper around the BitMap
-// class, with one bit per (1<<_shifter) HeapWords.
+// A generic mark bitmap for concurrent marking.  This is essentially a wrapper
+// around the BitMap class that is based on HeapWords, with one bit per (1 << _shifter) HeapWords.
+class MarkBitMap {
+protected:
+  MemRegion _covered;    // The heap area covered by this bitmap.
 
-class MarkBitMapRO {
- protected:
-  HeapWord* _bmStartWord;  // base address of range covered by map
-  size_t    _bmWordSize;   // map size (in #HeapWords covered)
-  const int _shifter;      // map to char or bit
-  BitMapView _bm;          // the bit map itself
+  const int _shifter;    // Shift amount from heap index to bit index in the bitmap.
 
- public:
-  // constructor
-  MarkBitMapRO(int shifter);
+  BitMapView _bm;        // The actual bitmap.
 
-  // inquiries
-  HeapWord* startWord()   const { return _bmStartWord; }
-  // the following is one past the last word in space
-  HeapWord* endWord()     const { return _bmStartWord + _bmWordSize; }
+  virtual void check_mark(HeapWord* addr) NOT_DEBUG_RETURN;
 
-  // read marks
-
-  bool isMarked(HeapWord* addr) const {
-    assert(_bmStartWord <= addr && addr < (_bmStartWord + _bmWordSize),
-           "outside underlying space?");
-    return _bm.at(heapWordToOffset(addr));
+  // Convert from bit offset to address.
+  HeapWord* offset_to_addr(size_t offset) const {
+    return _covered.start() + (offset << _shifter);
   }
-
-  // iteration
-  inline bool iterate(BitMapClosure* cl, MemRegion mr);
-
-  // Return the address corresponding to the next marked bit at or after
-  // "addr", and before "limit", if "limit" is non-NULL.  If there is no
-  // such bit, returns "limit" if that is non-NULL, or else "endWord()".
-  inline HeapWord* getNextMarkedWordAddress(const HeapWord* addr,
-                                     const HeapWord* limit = NULL) const;
-
-  // conversion utilities
-  HeapWord* offsetToHeapWord(size_t offset) const {
-    return _bmStartWord + (offset << _shifter);
+  // Convert from address to bit offset.
+  size_t addr_to_offset(const HeapWord* addr) const {
+    return pointer_delta(addr, _covered.start()) >> _shifter;
   }
-  size_t heapWordToOffset(const HeapWord* addr) const {
-    return pointer_delta(addr, _bmStartWord) >> _shifter;
-  }
-
-  // The argument addr should be the start address of a valid object
-  inline HeapWord* nextObject(HeapWord* addr);
-
-  void print_on_error(outputStream* st, const char* prefix) const;
-
-  // debugging
-  NOT_PRODUCT(bool covers(MemRegion rs) const;)
-};
-
-class MarkBitMap : public MarkBitMapRO {
-
- public:
+public:
   static size_t compute_size(size_t heap_size);
   // Returns the amount of bytes on the heap between two marks in the bitmap.
   static size_t mark_distance();
   // Returns how many bytes (or bits) of the heap a single byte (or bit) of the
-  // mark bitmap corresponds to. This is the same as the mark distance above.  static size_t heap_map_factor() {
+  // mark bitmap corresponds to. This is the same as the mark distance above.
   static size_t heap_map_factor() {
     return mark_distance();
   }
 
-  MarkBitMap() : MarkBitMapRO(LogMinObjAlignment) {}
+  MarkBitMap() : _covered(), _shifter(LogMinObjAlignment), _bm() {}
 
   // Initializes the underlying BitMap to cover the given area.
-  void initialize(MemRegion heap, MemRegion bitmap);
+  void initialize(MemRegion heap, MemRegion storage);
+
+  // Read marks
+  bool is_marked(oop obj) const;
+  bool is_marked(HeapWord* addr) const {
+    assert(_covered.contains(addr),
+           "Address " PTR_FORMAT " is outside underlying space from " PTR_FORMAT " to " PTR_FORMAT,
+           p2i(addr), p2i(_covered.start()), p2i(_covered.end()));
+    return _bm.at(addr_to_offset(addr));
+  }
+
+  // Return the address corresponding to the next marked bit at or after
+  // "addr", and before "limit", if "limit" is non-NULL.  If there is no
+  // such bit, returns "limit" if that is non-NULL, or else "endWord()".
+  inline HeapWord* get_next_marked_addr(const HeapWord* addr,
+                                        const HeapWord* limit) const;
+
+  void print_on_error(outputStream* st, const char* prefix) const;
 
   // Write marks.
   inline void mark(HeapWord* addr);
   inline void clear(HeapWord* addr);
-  inline bool parMark(HeapWord* addr);
+  inline void clear(oop obj);
+  inline bool par_mark(HeapWord* addr);
+  inline bool par_mark(oop obj);
 
-  // Clear range. For larger regions, use *_large.
   void clear_range(MemRegion mr);
   void clear_range_large(MemRegion mr);
 
   // Copies a part of the 'other' bitmap into the corresponding part of this bitmap.
   void copy_from(MarkBitMap* other, MemRegion mr);
+
+  MemRegion covered() const { return _covered; }
 };
 
-#endif // SHARE_VM_GC_SHARED_CMBITMAP_HPP
+#endif // SHARE_VM_GC_SHARED_MARKBITMAP_HPP
