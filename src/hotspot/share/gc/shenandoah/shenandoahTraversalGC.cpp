@@ -863,7 +863,7 @@ private:
 
   template <class T>
   inline void do_oop_work(T* p) {
-    _traversal_gc->process_oop<T, false /* string dedup */, false /* degen */, false /* matrix */>(p, _thread, _queue, _mark_context, NULL);
+    _traversal_gc->process_oop<T, false /* string dedup */, false /* degen */, false /* matrix */>(p, _thread, _queue, _mark_context);
   }
 
 public:
@@ -885,7 +885,7 @@ private:
 
   template <class T>
   inline void do_oop_work(T* p) {
-    _traversal_gc->process_oop<T, false /* string dedup */, true /* degen */, false /* matrix */>(p, _thread, _queue, _mark_context, NULL);
+    _traversal_gc->process_oop<T, false /* string dedup */, true /* degen */, false /* matrix */>(p, _thread, _queue, _mark_context);
   }
 
 public:
@@ -907,8 +907,7 @@ private:
 
   template <class T>
   inline void do_oop_work(T* p) {
-    // TODO: Need to somehow pass base_obj here?
-    _traversal_gc->process_oop<T, false /* string dedup */, false /* degen */, true /* matrix */>(p, _thread, _queue, _mark_context, NULL);
+    _traversal_gc->process_oop<T, false /* string dedup */, false /* degen */, true /* matrix */>(p, _thread, _queue, _mark_context);
   }
 
 public:
@@ -930,8 +929,7 @@ private:
 
   template <class T>
   inline void do_oop_work(T* p) {
-    // TODO: Need to somehow pass base_obj here?
-    _traversal_gc->process_oop<T, false /* string dedup */, true /* degen */, true /* matrix */>(p, _thread, _queue, _mark_context, NULL);
+    _traversal_gc->process_oop<T, false /* string dedup */, true /* degen */, true /* matrix */>(p, _thread, _queue, _mark_context);
   }
 
 public:
