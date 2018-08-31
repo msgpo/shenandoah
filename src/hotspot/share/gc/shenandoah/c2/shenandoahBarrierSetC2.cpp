@@ -773,7 +773,7 @@ Node* ShenandoahBarrierSetC2::resolve_for_write(GraphKit* kit, Node* n) const {
 }
 
 Node* ShenandoahBarrierSetC2::cmpoop_cmp(GraphKit* kit, Node* a, Node* b) const {
-  if (ShenandoahAcmpBarrier && ShenandoahVerifyOptoBarriers) {
+  if (ShenandoahAcmpBarrier && (ShenandoahVerifyOptoBarriers || ShenandoahAcmpWBBarrier)) {
     a = kit->access_resolve_for_write(a);
     b = kit->access_resolve_for_write(b);
   }
@@ -801,7 +801,7 @@ void ShenandoahBarrierSetC2::cmpoop_if(GraphKit* kit, Node* tst, float true_prob
   untaken_branch = kit->gvn().transform(untaken_branch);
 
   assert(taken_memory == NULL && untaken_memory == NULL, "unexpected memory inputs");
-  if (!UseShenandoahGC || !ShenandoahAcmpBarrier || ShenandoahVerifyOptoBarriers) {
+  if (!ShenandoahAcmpBarrier || ShenandoahVerifyOptoBarriers || ShenandoahAcmpWBBarrier) {
     return;
   }
   if (taken_branch->is_top() || untaken_branch->is_top()) {

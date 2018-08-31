@@ -328,6 +328,9 @@
   diagnostic(bool, ShenandoahAcmpBarrier, true,                             \
           "Turn on/off acmp barriers in Shenandoah")                        \
                                                                             \
+  diagnostic(bool, ShenandoahAcmpWBBarrier, false,                          \
+          "Emit WB based acmp barrier, otherwise RB based acmp barrier")    \
+                                                                            \
   diagnostic(bool, ShenandoahCloneBarrier, true,                            \
           "Turn on/off clone barriers in Shenandoah")                       \
                                                                             \
