@@ -191,7 +191,7 @@ void InstanceRefKlass::trace_reference_gc(const char *s, oop obj) {
                                p2i(referent_addr), p2i((oop)HeapAccess<ON_WEAK_OOP_REF | AS_NO_KEEPALIVE>::oop_load(referent_addr)));
   }
   log_develop_trace(gc, ref)("     discovered_addr/* " PTR_FORMAT " / " PTR_FORMAT,
-      p2i(discovered_addr), p2i((oop)RawAccess<>::oop_load(discovered_addr)));
+      p2i(discovered_addr), p2i((oop)HeapAccess<AS_NO_KEEPALIVE>::oop_load(discovered_addr)));
 }
 #endif
 

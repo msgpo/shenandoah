@@ -38,7 +38,6 @@ StringCleaningTask::StringCleaningTask(BoolObjectClosure* is_alive, StringDedupU
   _initial_string_table_size((int) StringTable::the_table()->table_size()),
   _process_strings(process_strings), _strings_processed(0), _strings_removed(0) {
 
-  _initial_string_table_size = (int) StringTable::the_table()->table_size();
   if (process_strings) {
     StringTable::reset_dead_counter();
   }

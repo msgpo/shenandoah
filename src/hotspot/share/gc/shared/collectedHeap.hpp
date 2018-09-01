@@ -187,8 +187,6 @@ class CollectedHeap : public CHeapObj<mtInternal> {
     return _filler_array_max_size;
   }
 
-  virtual HeapWord* tlab_post_allocation_setup(HeapWord* obj);
-
   virtual Name kind() const = 0;
 
   virtual const char* name() const = 0;
@@ -294,10 +292,6 @@ class CollectedHeap : public CHeapObj<mtInternal> {
   virtual oop class_allocate(Klass* klass, int size, TRAPS);
 
   virtual uint oop_extra_words();
-
-#ifndef CC_INTERP
-  virtual void compile_prepare_oop(MacroAssembler* masm, Register obj);
-#endif
 
   // Utilities for turning raw memory into filler objects.
   //

@@ -180,8 +180,8 @@ Metadata* oopDesc::metadata_field(int offset) const                   { return H
 Metadata* oopDesc::metadata_field_raw(int offset) const               { return RawAccess<>::load_at(as_oop(), offset); }
 void oopDesc::metadata_field_put(int offset, Metadata* value)         { HeapAccess<>::store_at(as_oop(), offset, value); }
 
-Metadata* oopDesc::metadata_field_acquire(int offset) const           { return RawAccess<MO_ACQUIRE>::load_at(as_oop(), offset); }
-void oopDesc::release_metadata_field_put(int offset, Metadata* value) { RawAccess<MO_RELEASE>::store_at(as_oop(), offset, value); }
+Metadata* oopDesc::metadata_field_acquire(int offset) const           { return HeapAccess<MO_ACQUIRE>::load_at(as_oop(), offset); }
+void oopDesc::release_metadata_field_put(int offset, Metadata* value) { HeapAccess<MO_RELEASE>::store_at(as_oop(), offset, value); }
 
 jbyte oopDesc::byte_field_acquire(int offset) const                   { return HeapAccess<MO_ACQUIRE>::load_at(as_oop(), offset); }
 void oopDesc::release_byte_field_put(int offset, jbyte value)         { HeapAccess<MO_RELEASE>::store_at(as_oop(), offset, value); }

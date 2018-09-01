@@ -34,7 +34,6 @@
 #include "code/vtableStubs.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/gcLocker.hpp"
-#include "gc/shared/collectedHeap.hpp"
 #include "interpreter/interpreter.hpp"
 #include "logging/log.hpp"
 #include "memory/resourceArea.hpp"
@@ -2516,7 +2515,7 @@ nmethod* SharedRuntime::generate_native_wrapper(MacroAssembler* masm,
   // Unpack native results.
   switch (ret_type) {
   case T_BOOLEAN: __ c2bool(rax);            break;
-  case T_CHAR   : __ movzwl(rax, rax);       break;
+  case T_CHAR   : __ movzwl(rax, rax);      break;
   case T_BYTE   : __ sign_extend_byte (rax); break;
   case T_SHORT  : __ sign_extend_short(rax); break;
   case T_INT    : /* nothing to do */        break;
