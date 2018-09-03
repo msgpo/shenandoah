@@ -616,9 +616,65 @@ const TypeFunc* ShenandoahBarrierSetC2::shenandoah_write_barrier_Type() {
   return TypeFunc::make(domain, range);
 }
 
-Node* ShenandoahBarrierSetC2::store_at(C2Access& access, C2AccessValue& val) const {
-  // TODO: Implement using proper barriers.
-  return BarrierSetC2::store_at(access, val);
+void ShenandoahBarrierSetC2::resolve_address(C2Access& access) const {
+  const TypePtr* adr_type = access.addr().type();
+
+  if ((access.decorators() & IN_NATIVE) == 0 && (adr_type->isa_instptr() || adr_type->isa_aryptr())) {
+    int off = adr_type->is_ptr()->offset();
+    int base_off = adr_type->isa_instptr() ? instanceOopDesc::base_offset_in_bytes() :
+      arrayOopDesc::base_offset_in_bytes(adr_type->is_aryptr()->elem()->array_element_basic_type());
+    assert(off != Type::OffsetTop, "unexpected offset");
+    if (off == Type::OffsetBot || off >= base_off) {
+      DecoratorSet decorators = access.decorators();
+      bool is_write = (decorators & C2_WRITE_ACCESS) != 0;
+      GraphKit* kit = access.kit();
+      Node* adr = access.addr().node();
+      assert(adr->is_AddP(), "unexpected address shape");
+      Node* base = adr->in(AddPNode::Base);
+
+      if (is_write) {
+        base = shenandoah_write_barrier(kit, base);
+      } else {
+        if (adr_type->isa_instptr()) {
+          Compile* C = kit->C;
+          ciField* field = C->alias_type(adr_type)->field();
+
+          // Insert read barrier for Shenandoah.
+          if (field != NULL &&
+              ((ShenandoahOptimizeStaticFinals   && field->is_static()  && field->is_final()) ||
+               (ShenandoahOptimizeInstanceFinals && !field->is_static() && field->is_final()) ||
+               (ShenandoahOptimizeStableFinals   && field->is_stable()))) {
+            // Skip the barrier for special fields
+          } else {
+            base = shenandoah_read_barrier(kit, base);
+          }
+        } else {
+          base = shenandoah_read_barrier(kit, base);
+        }
+      }
+      if (base != adr->in(AddPNode::Base)) {
+        Node* address = adr->in(AddPNode::Address);
+
+        if (address->is_AddP()) {
+          assert(address->in(AddPNode::Base) == adr->in(AddPNode::Base), "unexpected address shape");
+          assert(!address->in(AddPNode::Address)->is_AddP(), "unexpected address shape");
+          assert(address->in(AddPNode::Address) == adr->in(AddPNode::Base), "unexpected address shape");
+          address = address->clone();
+          address->set_req(AddPNode::Base, base);
+          address->set_req(AddPNode::Address, base);
+          address = kit->gvn().transform(address);
+        } else {
+          assert(address == adr->in(AddPNode::Base), "unexpected address shape");
+          address = base;
+        }
+        adr = adr->clone();
+        adr->set_req(AddPNode::Base, base);
+        adr->set_req(AddPNode::Address, address);
+        adr = kit->gvn().transform(adr);
+        access.addr().set_node(adr);
+      }
+    }
+  }
 }
 
 Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue& val) const {
@@ -645,11 +701,6 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
   return BarrierSetC2::store_at_resolved(access, val);
 }
 
-
-Node* ShenandoahBarrierSetC2::load_at(C2Access& access, const Type* val_type) const {
-  // TODO: Implement using proper barriers.
-  return BarrierSetC2::load_at(access, val_type);
-}
 
 Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val_type) const {
   DecoratorSet decorators = access.decorators();
@@ -711,12 +762,6 @@ Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicAccess& acc
   return BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, val, value_type);
 }
 
-Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at(C2AtomicAccess& access, Node* expected_val,
-                                                    Node* new_val, const Type* val_type) const {
-  // TODO: Implement using proper barriers.
-  return BarrierSetC2::atomic_cmpxchg_val_at(access, expected_val, new_val, val_type);
-}
-
 Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& access, Node* expected_val,
                                                               Node* val, const Type* value_type) const {
   GraphKit* kit = access.kit();
@@ -727,12 +772,6 @@ Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& ac
                                  expected_val /* pre_val */, T_OBJECT);
   }
   return BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, val, value_type);
-}
-
-Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at(C2AtomicAccess& access, Node* expected_val,
-                                                     Node* new_val, const Type* val_type) const {
-  // TODO: Implement using proper barriers.
-  return BarrierSetC2::atomic_cmpxchg_bool_at(access, expected_val, new_val, val_type);
 }
 
 Node* ShenandoahBarrierSetC2::atomic_xchg_at_resolved(C2AtomicAccess& access, Node* val, const Type* value_type) const {
@@ -749,18 +788,9 @@ Node* ShenandoahBarrierSetC2::atomic_xchg_at_resolved(C2AtomicAccess& access, No
   return result;
 }
 
-Node* ShenandoahBarrierSetC2::atomic_xchg_at(C2AtomicAccess& access, Node* new_val, const Type* value_type) const {
-  // TODO: Implement using proper barriers.
-  return BarrierSetC2::atomic_xchg_at(access, new_val, value_type);
-}
-
-Node* ShenandoahBarrierSetC2::atomic_add_at(C2AtomicAccess& access, Node* new_val, const Type* value_type) const {
-  // TODO: Implement using proper barriers.
-  return BarrierSetC2::atomic_add_at(access, new_val, value_type);
-}
-
 void ShenandoahBarrierSetC2::clone(GraphKit* kit, Node* src, Node* dst, Node* size, bool is_array) const {
-  // TODO: Implement using proper barriers.
+  assert(!src->is_AddP(), "unexpected input");
+  src = shenandoah_read_barrier(kit, src);
   BarrierSetC2::clone(kit, src, dst, size, is_array);
 }
 
@@ -773,9 +803,9 @@ Node* ShenandoahBarrierSetC2::resolve_for_write(GraphKit* kit, Node* n) const {
 }
 
 Node* ShenandoahBarrierSetC2::cmpoop_cmp(GraphKit* kit, Node* a, Node* b) const {
-  if (ShenandoahAcmpBarrier && (ShenandoahVerifyOptoBarriers || ShenandoahAcmpWBBarrier)) {
-    a = kit->access_resolve_for_write(a);
-    b = kit->access_resolve_for_write(b);
+  if (ShenandoahAcmpBarrier && ShenandoahVerifyOptoBarriers || ShenandoahAcmpWBBarrier) {
+    a = shenandoah_write_barrier(kit, a);
+    b = shenandoah_write_barrier(kit, b);
   }
   return kit->gvn().transform(new CmpPNode(b, a));
 }
@@ -934,6 +964,12 @@ void ShenandoahBarrierSetC2::cmpoop_if(GraphKit* kit, Node* tst, float true_prob
   }
 }
 
+void ShenandoahBarrierSetC2::resolve_for_cmpoop(GraphKit* kit, Node*& a, Node*& b) const {
+  a = shenandoah_write_barrier(kit, a);
+  b = shenandoah_write_barrier(kit, b);
+}
+
+
 // Support for GC barriers emitted during parsing
 bool ShenandoahBarrierSetC2::is_gc_barrier_node(Node* node) const {
   if (node->Opcode() != Op_CallLeaf) {
@@ -954,9 +990,26 @@ Node* ShenandoahBarrierSetC2::step_over_gc_barrier(Node* c) const {
   return c;
 }
 
-bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(BasicType type) const {
+Node* ShenandoahBarrierSetC2::peek_thru_gc_barrier(Node* v) const {
+  return ShenandoahBarrierNode::skip_through_barrier(v);
+}
+
+bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const {
   bool is_oop = type == T_OBJECT || type == T_ARRAY;
-  return is_oop && UseShenandoahMatrix;
+  if (!is_oop) {
+    return false;
+  }
+
+  if (tightly_coupled_alloc) {
+    if (phase == Optimization) {
+      return UseShenandoahMatrix;
+    }
+    return !is_clone;
+  }
+  if (phase == Optimization) {
+    return !ShenandoahStoreValEnqueueBarrier;
+  }
+  return true;
 }
 
 // Support for macro expanded GC barriers

@@ -171,17 +171,6 @@ void Parse::do_get_xxx(Node* obj, ciField* field, bool is_field) {
   int offset = field->offset_in_bytes();
   const TypePtr* adr_type = C->alias_type(field)->adr_type();
 
-#if INCLUDE_SHENANDOAHGC
-  // Insert read barrier for Shenandoah.
-  if ((ShenandoahOptimizeStaticFinals   && field->is_static()  && field->is_final()) ||
-      (ShenandoahOptimizeInstanceFinals && !field->is_static() && field->is_final()) ||
-      (ShenandoahOptimizeStableFinals   && field->is_stable())) {
-    // Skip the barrier for special fields
-  } else {
-    obj = access_resolve_for_read(obj);
-  }
-#endif
-
   Node *adr = basic_plus_adr(obj, obj, offset);
 
   // Build the resultant type of the load
@@ -265,9 +254,6 @@ void Parse::do_get_xxx(Node* obj, ciField* field, bool is_field) {
 void Parse::do_put_xxx(Node* obj, ciField* field, bool is_field) {
   bool is_vol = field->is_volatile();
 
-  // Insert write barrier for Shenandoah.
-  obj = access_resolve_for_write(obj);
-
   // Compute address and memory type.
   int offset = field->offset_in_bytes();
   const TypePtr* adr_type = C->alias_type(field)->adr_type();
@@ -292,7 +278,7 @@ void Parse::do_put_xxx(Node* obj, ciField* field, bool is_field) {
       field_type = Type::BOTTOM;
     }
   }
-  access_store_at(control(), obj, adr, adr_type, val, field_type, bt, decorators);
+  access_store_at(obj, adr, adr_type, val, field_type, bt, decorators);
 
   if (is_field) {
     // Remember we wrote a volatile field.
@@ -379,7 +365,7 @@ Node* Parse::expand_multianewarray(ciArrayKlass* array_klass, Node* *lengths, in
       Node*    elem   = expand_multianewarray(array_klass_1, &lengths[1], ndimensions-1, nargs);
       intptr_t offset = header + ((intptr_t)i << LogBytesPerHeapOop);
       Node*    eaddr  = basic_plus_adr(array, offset);
-      access_store_at(control(), array, eaddr, adr_type, elem, elemtype, T_OBJECT, IN_HEAP | IS_ARRAY);
+      access_store_at(array, eaddr, adr_type, elem, elemtype, T_OBJECT, IN_HEAP | IS_ARRAY);
     }
   }
   return array;

@@ -108,7 +108,7 @@ void Parse::array_store(BasicType bt) {
 
   const TypeAryPtr* adr_type = TypeAryPtr::get_array_body_type(bt);
 
-  access_store_at(control(), array, adr, adr_type, val, elemtype, bt, MO_UNORDERED | IN_HEAP | IS_ARRAY);
+  access_store_at(array, adr, adr_type, val, elemtype, bt, MO_UNORDERED | IN_HEAP | IS_ARRAY);
 }
 
 
@@ -207,12 +207,6 @@ Node* Parse::array_addressing(BasicType type, int vals, bool is_store, const Typ
   }
   // Check for always knowing you are throwing a range-check exception
   if (stopped())  return top();
-
-  if (is_store) {
-    ary = access_resolve_for_write(ary);
-  } else {
-    ary = access_resolve_for_read(ary);
-  }
 
   // Make array address computation control dependent to prevent it
   // from floating above the range check during loop optimizations.
@@ -1615,7 +1609,7 @@ void Parse::do_if(BoolTest::mask btest, Node* c) {
     taken_branch   = new IfTrueNode(iff);
     untaken_branch = new IfFalseNode(iff);
   } else {
-    _barrier_set->cmpoop_if(this, tst, true_prob, cnt, taken_branch, untaken_branch, taken_memory, untaken_memory);
+    cmpoop_if(tst, true_prob, cnt, taken_branch, untaken_branch, taken_memory, untaken_memory);
   }
   if (!taken_if_true) {  // Finish conversion to canonical form
     Node* tmp      = taken_branch;
@@ -2778,7 +2772,7 @@ void Parse::do_one_bytecode() {
     maybe_add_safepoint(iter().get_dest());
     a = pop();
     b = pop();
-    c = _barrier_set->cmpoop_cmp(this, a, b);
+    c = cmpoop_cmp(a, b);
     c = optimize_cmp_with_klass(c);
     do_if(btest, c);
     break;

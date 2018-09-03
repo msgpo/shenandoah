@@ -318,8 +318,7 @@ bool ArrayCopyNode::prepare_array_copy(PhaseGVN *phase, bool can_reshape,
     }
 
     BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-    if (dest_elem == T_OBJECT && (!is_alloc_tightly_coupled() ||
-                                  bs->array_copy_requires_gc_barriers(T_OBJECT) SHENANDOAHGC_ONLY(&& !ShenandoahStoreValEnqueueBarrier))) {
+    if (bs->array_copy_requires_gc_barriers(is_alloc_tightly_coupled(), dest_elem, false, BarrierSetC2::Optimization)) {
       // It's an object array copy but we can't emit the card marking
       // that is needed
       return false;
@@ -368,11 +367,10 @@ bool ArrayCopyNode::prepare_array_copy(PhaseGVN *phase, bool can_reshape,
     BasicType elem = ary_src->klass()->as_array_klass()->element_type()->basic_type();
     if (elem == T_ARRAY)  elem = T_OBJECT;
 
-#if INCLUDE_SHENANDOAHGC
-    if (elem == T_OBJECT && (UseShenandoahGC && UseShenandoahMatrix)) {
+    BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+    if (bs->array_copy_requires_gc_barriers(true, elem, true, BarrierSetC2::Optimization)) {
       return false;
     }
-#endif
 
     int diff = arrayOopDesc::base_offset_in_bytes(elem) - phase->type(src->in(AddPNode::Offset))->is_intptr_t()->get_con();
     assert(diff >= 0, "clone should not start after 1st array element");
@@ -544,7 +542,7 @@ bool ArrayCopyNode::finish_transform(PhaseGVN *phase, bool can_reshape,
       BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
       if (out_mem->outcnt() != 1 || !out_mem->raw_out(0)->is_MergeMem() ||
           out_mem->raw_out(0)->outcnt() != 1 || !out_mem->raw_out(0)->raw_out(0)->is_MemBar()) {
-        assert(bs->array_copy_requires_gc_barriers(T_OBJECT), "can only happen with card marking");
+        assert(bs->array_copy_requires_gc_barriers(true, T_OBJECT, true, BarrierSetC2::Optimization), "can only happen with card marking");
         return false;
       }
 

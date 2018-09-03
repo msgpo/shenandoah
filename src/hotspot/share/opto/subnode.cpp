@@ -113,18 +113,6 @@ const Type* SubNode::Value(PhaseGVN* phase) const {
   }
   Node* in1 = in(1);
   Node* in2 = in(2);
-#if INCLUDE_SHENANDOAHGC
-  if (Opcode() == Op_CmpP) {
-    Node* n = ShenandoahBarrierNode::skip_through_barrier(in1);
-    if (!n->is_top()) {
-      in1 = n;
-    }
-    n = ShenandoahBarrierNode::skip_through_barrier(in2);
-    if (!n->is_top()) {
-      in2 = n;
-    }
-  }
-#endif
   const Type* t1 = phase->type(in1);
   const Type* t2 = phase->type(in2);
   return sub(t1,t2);            // Local flavor of type subtraction
@@ -1043,11 +1031,12 @@ Node *CmpPNode::Ideal( PhaseGVN *phase, bool can_reshape ) {
   if (UseShenandoahGC) {
     Node* in1 = in(1);
     Node* in2 = in(2);
+    BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
     if (in1->bottom_type() == TypePtr::NULL_PTR) {
-      in2 = ShenandoahBarrierNode::skip_through_barrier(in2);
+      in2 = bs->peek_thru_gc_barrier(in2);
     }
     if (in2->bottom_type() == TypePtr::NULL_PTR) {
-      in1 = ShenandoahBarrierNode::skip_through_barrier(in1);
+      in1 = bs->peek_thru_gc_barrier(in1);
     }
     PhaseIterGVN* igvn = phase->is_IterGVN();
     if (in1 != in(1)) {

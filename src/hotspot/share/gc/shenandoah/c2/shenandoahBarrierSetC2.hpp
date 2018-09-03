@@ -75,6 +75,7 @@ private:
                           Node* pre_val, bool need_mem_bar) const;
 
 protected:
+  virtual void resolve_address(C2Access& access) const;
   virtual Node* load_at_resolved(C2Access& access, const Type* val_type) const;
   virtual Node* store_at_resolved(C2Access& access, C2AccessValue& val) const;
   virtual Node* atomic_cmpxchg_val_at_resolved(C2AtomicAccess& access, Node* expected_val,
@@ -95,16 +96,6 @@ public:
   static const TypeFunc* shenandoah_write_barrier_Type();
 
   // This is the entry-point for the backend to perform accesses through the Access API.
-  virtual Node* store_at(C2Access& access, C2AccessValue& val) const;
-  virtual Node* load_at(C2Access& access, const Type* val_type) const;
-
-  virtual Node* atomic_cmpxchg_val_at(C2AtomicAccess& access, Node* expected_val,
-                                      Node* new_val, const Type* val_type) const;
-  virtual Node* atomic_cmpxchg_bool_at(C2AtomicAccess& access, Node* expected_val,
-                                       Node* new_val, const Type* val_type) const;
-  virtual Node* atomic_xchg_at(C2AtomicAccess& access, Node* new_val, const Type* value_type) const;
-  virtual Node* atomic_add_at(C2AtomicAccess& access, Node* new_val, const Type* value_type) const;
-
   virtual void clone(GraphKit* kit, Node* src, Node* dst, Node* size, bool is_array) const;
 
   virtual Node* resolve_for_read(GraphKit* kit, Node* n) const;
@@ -114,13 +105,15 @@ public:
   virtual void cmpoop_if(GraphKit* kit, Node* tst, float true_prob, float cnt,
                          Node*& taken_branch, Node*& untaken_branch,
                          Node*& taken_memory, Node*& untaken_memory) const;
+  virtual void resolve_for_cmpoop(GraphKit* kit, Node*& a, Node*& b) const;
 
   // These are general helper methods used by C2
-  virtual bool array_copy_requires_gc_barriers(BasicType type) const;
+  virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const;
 
   // Support for GC barriers emitted during parsing
   virtual bool is_gc_barrier_node(Node* node) const;
   virtual Node* step_over_gc_barrier(Node* c) const;
+  virtual Node* peek_thru_gc_barrier(Node* v) const;
 
   // Support for macro expanded GC barriers
   virtual void register_potential_barrier_node(Node* node) const;

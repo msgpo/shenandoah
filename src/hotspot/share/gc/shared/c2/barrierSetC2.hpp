@@ -76,14 +76,12 @@ public:
 
 // This class wraps a node and a pointer type.
 class C2AccessValuePtr: public C2AccessValue {
-  int _alias_idx;
 
 public:
   C2AccessValuePtr(Node* node, const TypePtr* type) :
     C2AccessValue(node, reinterpret_cast<const Type*>(type)) {}
 
   const TypePtr* type() const { return reinterpret_cast<const TypePtr*>(_type); }
-  int alias_idx() const       { return _alias_idx; }
 };
 
 // This class wraps a bunch of context parameters thare are passed around in the
@@ -202,14 +200,22 @@ public:
   virtual void cmpoop_if(GraphKit* kit, Node* tst, float true_prob, float cnt,
                          Node*& taken_branch, Node*& untaken_branch,
                          Node*& taken_memory, Node*& untaken_memory) const;
+  virtual void resolve_for_cmpoop(GraphKit* kit, Node*& a, Node*& b) const {}
 
   // These are general helper methods used by C2
-  virtual bool array_copy_requires_gc_barriers(BasicType type) const { return false; }
+  enum ArrayCopyPhase {
+    Parsing,
+    Optimization,
+    Expansion
+  };
+  virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const { return false; }
 
   // Support for GC barriers emitted during parsing
   virtual bool has_load_barriers() const { return false; }
   virtual bool is_gc_barrier_node(Node* node) const { return false; }
   virtual Node* step_over_gc_barrier(Node* c) const { return c; }
+
+  virtual Node* peek_thru_gc_barrier(Node* v) const { return v; }
 
   // Support for macro expanded GC barriers
   virtual void register_potential_barrier_node(Node* node) const { }
