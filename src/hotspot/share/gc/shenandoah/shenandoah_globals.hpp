@@ -468,5 +468,8 @@
                                                                             \
   diagnostic(bool, ShenandoahCompileCheck, false,                           \
           "Assert that methods are successfully compilable")                \
+                                                                            \
+  experimental(bool, ShenandoahAlwaysClearSoftRefs, false,                  \
+          "Clear soft references unconditionally")                          \
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP
