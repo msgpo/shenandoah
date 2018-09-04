@@ -199,7 +199,7 @@
                "space. Larger values make evacuations more resilient "      \
                "against allocation failures, at expense of smaller csets "  \
                "on each cycle.")                                            \
-          range(1,100)                                                      \
+          range(1.0,100.0)                                                      \
                                                                             \
   experimental(bool, ShenandoahEvacReserveOverflow, true,                   \
                "Allow evacuations to overflow the reserved space. "         \
@@ -441,7 +441,7 @@
           "Larger values makes the pacing more aggressive. Lower values "   \
           "risk GC cycles finish with less memory than were available at "  \
           "the beginning of it.")                                           \
-          range(1, 100)                                                     \
+          range(1.0, 100.0)                                                     \
                                                                             \
   experimental(uintx, ShenandoahCriticalFreeThreshold, 1,                   \
           "Percent of heap that needs to be free after recovery cycles, "   \
