@@ -232,12 +232,6 @@ Node* ArrayCopyNode::try_clone_instance(PhaseGVN *phase, bool can_reshape, int c
   ciInstanceKlass* ik = inst_src->klass()->as_instance_klass();
   assert(ik->nof_nonstatic_fields() <= ArrayCopyLoadStoreMaxElem, "too many fields");
 
-#if INCLUDE_SHENANDOAHGC
-  if (UseShenandoahGC && UseShenandoahMatrix && ik->has_object_fields()) {
-    return NodeSentinel;
-  }
-#endif
-
   for (int i = 0; i < count; i++) {
     ciField* field = ik->nonstatic_field_at(i);
     int fieldidx = phase->C->alias_type(field)->index();

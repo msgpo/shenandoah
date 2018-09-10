@@ -122,7 +122,6 @@ private:
   CodeBlob* _pre_barrier_c1_runtime_code_blob;
 
   void pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val);
-  void post_barrier(LIRGenerator* gen, LIR_OprDesc* addr, LIR_OprDesc* new_val);
 
   LIR_Opr read_barrier(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
   LIR_Opr write_barrier(LIRGenerator* gen, LIR_Opr obj, CodeEmitInfo* info, bool need_null_check);
