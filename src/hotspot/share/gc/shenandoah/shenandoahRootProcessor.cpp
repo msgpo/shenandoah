@@ -170,29 +170,29 @@ void ShenandoahRootProcessor::process_vm_roots(OopClosure* strong_roots,
                                                uint worker_id)
 {
   ShenandoahWorkerTimings* worker_times = ShenandoahHeap::heap()->phase_timings()->worker_times();
-  if (!_process_strong_tasks->is_task_claimed(SHENANDOAH_RP_PS_Universe_oops_do)) {
+  if (_process_strong_tasks->try_claim_task(SHENANDOAH_RP_PS_Universe_oops_do)) {
     ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::UniverseRoots, worker_id);
     Universe::oops_do(strong_roots);
   }
 
-  if (!_process_strong_tasks->is_task_claimed(SHENANDOAH_RP_PS_JNIHandles_oops_do)) {
+  if (_process_strong_tasks->try_claim_task(SHENANDOAH_RP_PS_JNIHandles_oops_do)) {
     ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::JNIRoots, worker_id);
     JNIHandles::oops_do(strong_roots);
   }
-  if (!_process_strong_tasks->is_task_claimed(SHENANDOAH_RP_PS_Management_oops_do)) {
+  if (_process_strong_tasks->try_claim_task(SHENANDOAH_RP_PS_Management_oops_do)) {
     ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::ManagementRoots, worker_id);
     Management::oops_do(strong_roots);
   }
-  if (!_process_strong_tasks->is_task_claimed(SHENANDOAH_RP_PS_jvmti_oops_do)) {
+  if (_process_strong_tasks->try_claim_task(SHENANDOAH_RP_PS_jvmti_oops_do)) {
     ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::JVMTIRoots, worker_id);
     JvmtiExport::oops_do(strong_roots);
   }
-  if (!_process_strong_tasks->is_task_claimed(SHENANDOAH_RP_PS_SystemDictionary_oops_do)) {
+  if (_process_strong_tasks->try_claim_task(SHENANDOAH_RP_PS_SystemDictionary_oops_do)) {
     ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::SystemDictionaryRoots, worker_id);
     SystemDictionary::oops_do(strong_roots);
   }
   if (jni_weak_roots != NULL) {
-    if (!_process_strong_tasks->is_task_claimed(SHENANDOAH_RP_PS_JNIHandles_weak_oops_do)) {
+    if (_process_strong_tasks->try_claim_task(SHENANDOAH_RP_PS_JNIHandles_weak_oops_do)) {
       ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::JNIWeakRoots, worker_id);
       WeakProcessor::oops_do(jni_weak_roots);
     }
@@ -205,7 +205,7 @@ void ShenandoahRootProcessor::process_vm_roots(OopClosure* strong_roots,
   {
     ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::ObjectSynchronizerRoots, worker_id);
     if (ShenandoahFastSyncRoots && MonitorInUseLists) {
-      if (!_process_strong_tasks->is_task_claimed(SHENANDOAH_RP_PS_ObjectSynchronizer_oops_do)) {
+      if (_process_strong_tasks->try_claim_task(SHENANDOAH_RP_PS_ObjectSynchronizer_oops_do)) {
         ObjectSynchronizer::oops_do(strong_roots);
       }
     } else {
