@@ -634,11 +634,7 @@ class GraphKit : public Phase {
 
   Node* access_resolve_for_read(Node* n);
   Node* access_resolve_for_write(Node* n);
-  void access_resolve_for_cmpoop(Node*& a, Node*& b);
-  Node* cmpoop_cmp(Node* a, Node* b);
-  void cmpoop_if(Node* tst, float true_prob, float cnt,
-                 Node*& taken_branch, Node*& untaken_branch,
-                 Node*& taken_memory, Node*& untaken_memory);
+  void access_resolve_for_obj_equals(Node*& a, Node*& b);
 
   // Return addressing for an array element.
   Node* array_element_address(Node* ary, Node* idx, BasicType elembt,

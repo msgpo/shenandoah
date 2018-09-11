@@ -102,11 +102,7 @@ public:
   virtual Node* resolve_for_read(GraphKit* kit, Node* n) const;
   virtual Node* resolve_for_write(GraphKit* kit, Node* n) const;
 
-  virtual Node* cmpoop_cmp(GraphKit* kit, Node* a, Node* b) const;
-  virtual void cmpoop_if(GraphKit* kit, Node* tst, float true_prob, float cnt,
-                         Node*& taken_branch, Node*& untaken_branch,
-                         Node*& taken_memory, Node*& untaken_memory) const;
-  virtual void resolve_for_cmpoop(GraphKit* kit, Node*& a, Node*& b) const;
+  virtual void resolve_for_obj_equals(GraphKit* kit, Node*& a, Node*& b) const;
 
   // These are general helper methods used by C2
   virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const;

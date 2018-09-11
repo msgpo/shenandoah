@@ -2982,7 +2982,8 @@ bool LibraryCallKit::inline_native_isInterrupted() {
   Node* tls_ptr = NULL;
   Node* cur_thr = generate_current_thread(tls_ptr);
 
-  access_resolve_for_cmpoop(cur_thr, rec_thr);
+  access_resolve_for_obj_equals(cur_thr, rec_thr);
+
   Node* cmp_thr = _gvn.transform(new CmpPNode(cur_thr, rec_thr));
   Node* bol_thr = _gvn.transform(new BoolNode(cmp_thr, BoolTest::ne));
 
@@ -3398,9 +3399,7 @@ bool LibraryCallKit::inline_native_subtype_check() {
 
   RegionNode* region = new RegionNode(PATH_LIMIT);
   Node*       phi    = new PhiNode(region, TypeInt::BOOL);
-  Node*       mem_phi= new PhiNode(region, Type::MEMORY, TypePtr::BOTTOM);
   record_for_igvn(region);
-  Node* init_mem = map()->memory();
 
   const TypePtr* adr_type = TypeRawPtr::BOTTOM;   // memory type of loads
   const TypeKlassPtr* kls_type = TypeKlassPtr::OBJECT_OR_NULL;
@@ -3419,7 +3418,7 @@ bool LibraryCallKit::inline_native_subtype_check() {
     klasses[which_arg] = _gvn.transform(kls);
   }
 
-  access_resolve_for_cmpoop(args[0], args[1]);
+  access_resolve_for_obj_equals(args[0], args[1]);
 
   // Having loaded both klasses, test each for null.
   bool never_see_null = !too_many_traps(Deoptimization::Reason_null_check);
@@ -3465,24 +3464,18 @@ bool LibraryCallKit::inline_native_subtype_check() {
 
   // pull together the cases:
   assert(region->req() == PATH_LIMIT, "sane region");
-  Node* cur_mem = reset_memory();
   for (uint i = 1; i < region->req(); i++) {
     Node* ctl = region->in(i);
     if (ctl == NULL || ctl == top()) {
       region->set_req(i, top());
       phi   ->set_req(i, top());
-      mem_phi->set_req(i, top());
-    } else {
-      if (phi->in(i) == NULL) {
-        phi->set_req(i, intcon(0)); // all other paths produce 'false'
-      }
-      mem_phi->set_req(i, (i == _prim_0_path || i == _prim_same_path) ?  cur_mem : init_mem);
+    } else if (phi->in(i) == NULL) {
+      phi->set_req(i, intcon(0)); // all other paths produce 'false'
     }
   }
 
   set_control(_gvn.transform(region));
   set_result(_gvn.transform(phi));
-  set_all_memory(_gvn.transform(mem_phi));
   return true;
 }
 
@@ -6154,12 +6147,10 @@ Node* LibraryCallKit::inline_cipherBlockChaining_AESCrypt_predicate(bool decrypt
     return ctrl;
   }
 
-  // Resolve src and dest arrays for ShenandoahGC.  Here because new
-  // memory state is not handled by predicate logic in
-  // inline_cipherBlockChaining_AESCrypt itself
   src = must_be_not_null(src, true);
   dest = must_be_not_null(dest, true);
-  access_resolve_for_cmpoop(src, dest);
+
+  access_resolve_for_obj_equals(src, dest);
 
   ciInstanceKlass* instklass_AESCrypt = klass_AESCrypt->as_instance_klass();
 

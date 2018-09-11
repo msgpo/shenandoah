@@ -1699,20 +1699,9 @@ Node* GraphKit::access_resolve_for_write(Node* n) {
   return _barrier_set->resolve_for_write(this, n);
 }
 
-Node* GraphKit::cmpoop_cmp(Node* a, Node* b) {
-  return _barrier_set->cmpoop_cmp(this, a, b);
-
+void GraphKit::access_resolve_for_obj_equals(Node*& a, Node*& b) {
+  return _barrier_set->resolve_for_obj_equals(this, a, b);
 }
-void GraphKit::cmpoop_if(Node* tst, float true_prob, float cnt,
-                         Node*& taken_branch, Node*& untaken_branch,
-                         Node*& taken_memory, Node*& untaken_memory) {
-  _barrier_set->cmpoop_if(this, tst, true_prob, cnt, taken_branch, untaken_branch, taken_memory, untaken_memory);
-}
-
-void GraphKit::access_resolve_for_cmpoop(Node*& a, Node*& b) {
-  _barrier_set->resolve_for_cmpoop(this, a, b);
-}
-
 
 //-------------------------array_element_address-------------------------
 Node* GraphKit::array_element_address(Node* ary, Node* idx, BasicType elembt,

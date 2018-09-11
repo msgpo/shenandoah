@@ -196,11 +196,7 @@ public:
     return n;
   }
 
-  virtual Node* cmpoop_cmp(GraphKit* kit, Node* a, Node* b) const;
-  virtual void cmpoop_if(GraphKit* kit, Node* tst, float true_prob, float cnt,
-                         Node*& taken_branch, Node*& untaken_branch,
-                         Node*& taken_memory, Node*& untaken_memory) const;
-  virtual void resolve_for_cmpoop(GraphKit* kit, Node*& a, Node*& b) const {}
+  virtual void resolve_for_obj_equals(GraphKit* kit, Node*& a, Node*& b) const {}
 
   // These are general helper methods used by C2
   enum ArrayCopyPhase {
