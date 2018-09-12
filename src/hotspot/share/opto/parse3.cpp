@@ -170,7 +170,6 @@ void Parse::do_get_xxx(Node* obj, ciField* field, bool is_field) {
   // Compute address and memory type.
   int offset = field->offset_in_bytes();
   const TypePtr* adr_type = C->alias_type(field)->adr_type();
-
   Node *adr = basic_plus_adr(obj, obj, offset);
 
   // Build the resultant type of the load
@@ -206,19 +205,6 @@ void Parse::do_get_xxx(Node* obj, ciField* field, bool is_field) {
   }
 
   Node* ld = access_load_at(obj, adr, adr_type, type, bt, decorators);
-
-#if INCLUDE_SHENANDOAHGC
-  // Only enabled for Shenandoah. Can this be useful in general?
-  if (UseShenandoahGC && ShenandoahOptimizeStableFinals && UseImplicitStableValues) {
-    if (field->holder()->name() == ciSymbol::java_lang_String() &&
-        field->offset() == java_lang_String::value_offset_in_bytes()) {
-      const TypeAryPtr* value_type = TypeAryPtr::make(TypePtr::NotNull,
-                                                      TypeAry::make(TypeInt::BYTE, TypeInt::POS),
-                                                      ciTypeArrayKlass::make(T_BYTE), true, 0);
-      ld = cast_array_to_stable(ld, value_type);
-    }
-  }
-#endif
 
   // Adjust Java stack
   if (type2size[bt] == 1)
