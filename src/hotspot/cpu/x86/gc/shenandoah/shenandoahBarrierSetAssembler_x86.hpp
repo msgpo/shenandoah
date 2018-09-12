@@ -27,8 +27,11 @@
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/barrierSetAssembler.hpp"
 #ifdef COMPILER1
-#include "c1/c1_LIRAssembler.hpp"
-#include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
+class LIR_Assembler;
+class ShenandoahPreBarrierStub;
+class ShenandoahWriteBarrierStub;
+class StubAssembler;
+class StubCodeGenerator;
 #endif
 
 class ShenandoahBarrierSetAssembler: public BarrierSetAssembler {
@@ -79,9 +82,9 @@ public:
   void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
 #endif
 
-  virtual void cmpxchg_oop(MacroAssembler* masm, DecoratorSet decorators,
-                           Register res, Address addr, Register oldval, Register newval,
-                           bool exchange, bool encode, Register tmp1, Register tmp2);
+  void cmpxchg_oop(MacroAssembler* masm,
+                   Register res, Address addr, Register oldval, Register newval,
+                   bool exchange, bool encode, Register tmp1, Register tmp2);
   virtual void xchg_oop(MacroAssembler* masm, DecoratorSet decorators,
                         Register obj, Address addr, Register tmp);
 

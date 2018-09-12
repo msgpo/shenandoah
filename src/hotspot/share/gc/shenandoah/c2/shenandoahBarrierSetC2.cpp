@@ -30,6 +30,7 @@
 #include "opto/graphKit.hpp"
 #include "opto/idealKit.hpp"
 #include "opto/macro.hpp"
+#include "opto/narrowptrnode.hpp"
 
 ShenandoahBarrierSetC2* ShenandoahBarrierSetC2::bsc2() {
   return reinterpret_cast<ShenandoahBarrierSetC2*>(BarrierSet::barrier_set()->barrier_set_c2());
@@ -654,28 +655,81 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
 }
 
 Node* ShenandoahBarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicAccess& access, Node* expected_val,
-                                                   Node* val, const Type* value_type) const {
+                                                   Node* new_val, const Type* value_type) const {
   GraphKit* kit = access.kit();
   if (access.is_oop()) {
-    val = shenandoah_storeval_barrier(kit, val);
+    new_val = shenandoah_storeval_barrier(kit, new_val);
     shenandoah_write_barrier_pre(kit, false /* do_load */,
                                  NULL, NULL, max_juint, NULL, NULL,
                                  expected_val /* pre_val */, T_OBJECT);
 
+    MemNode::MemOrd mo = access.mem_node_mo();
+    Node* mem = access.memory();
+    Node* adr = access.addr().node();
+    const TypePtr* adr_type = access.addr().type();
+    Node* load_store = NULL;
+
+#ifdef _LP64
+    if (adr->bottom_type()->is_ptr_to_narrowoop()) {
+      Node *newval_enc = kit->gvn().transform(new EncodePNode(new_val, new_val->bottom_type()->make_narrowoop()));
+      Node *oldval_enc = kit->gvn().transform(new EncodePNode(expected_val, expected_val->bottom_type()->make_narrowoop()));
+      load_store = kit->gvn().transform(new ShenandoahCompareAndExchangeNNode(kit->control(), mem, adr, newval_enc, oldval_enc, adr_type, value_type->make_narrowoop(), mo));
+    } else
+#endif
+    {
+      load_store = kit->gvn().transform(new ShenandoahCompareAndExchangePNode(kit->control(), mem, adr, new_val, expected_val, adr_type, value_type->is_oopptr(), mo));
+    }
+
+    access.set_raw_access(load_store);
+    pin_atomic_op(access);
+
+#ifdef _LP64
+    if (adr->bottom_type()->is_ptr_to_narrowoop()) {
+      return kit->gvn().transform(new DecodeNNode(load_store, load_store->get_ptr_type()));
+    }
+#endif
+    return load_store;
   }
-  return BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, val, value_type);
+  return BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, new_val, value_type);
 }
 
 Node* ShenandoahBarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& access, Node* expected_val,
-                                                              Node* val, const Type* value_type) const {
+                                                              Node* new_val, const Type* value_type) const {
   GraphKit* kit = access.kit();
   if (access.is_oop()) {
-    val = shenandoah_storeval_barrier(kit, val);
+    new_val = shenandoah_storeval_barrier(kit, new_val);
     shenandoah_write_barrier_pre(kit, false /* do_load */,
                                  NULL, NULL, max_juint, NULL, NULL,
                                  expected_val /* pre_val */, T_OBJECT);
+    DecoratorSet decorators = access.decorators();
+    MemNode::MemOrd mo = access.mem_node_mo();
+    Node* mem = access.memory();
+    bool is_weak_cas = (decorators & C2_WEAK_CMPXCHG) != 0;
+    Node* load_store = NULL;
+    Node* adr = access.addr().node();
+#ifdef _LP64
+    if (adr->bottom_type()->is_ptr_to_narrowoop()) {
+      Node *newval_enc = kit->gvn().transform(new EncodePNode(new_val, new_val->bottom_type()->make_narrowoop()));
+      Node *oldval_enc = kit->gvn().transform(new EncodePNode(expected_val, expected_val->bottom_type()->make_narrowoop()));
+      if (is_weak_cas) {
+        load_store = kit->gvn().transform(new ShenandoahWeakCompareAndSwapNNode(kit->control(), mem, adr, newval_enc, oldval_enc, mo));
+      } else {
+        load_store = kit->gvn().transform(new ShenandoahCompareAndSwapNNode(kit->control(), mem, adr, newval_enc, oldval_enc, mo));
+      }
+    } else
+#endif
+    {
+      if (is_weak_cas) {
+        load_store = kit->gvn().transform(new ShenandoahWeakCompareAndSwapPNode(kit->control(), mem, adr, new_val, expected_val, mo));
+      } else {
+        load_store = kit->gvn().transform(new ShenandoahCompareAndSwapPNode(kit->control(), mem, adr, new_val, expected_val, mo));
+      }
+    }
+    access.set_raw_access(load_store);
+    pin_atomic_op(access);
+    return load_store;
   }
-  return BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, val, value_type);
+  return BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, new_val, value_type);
 }
 
 Node* ShenandoahBarrierSetC2::atomic_xchg_at_resolved(C2AtomicAccess& access, Node* val, const Type* value_type) const {

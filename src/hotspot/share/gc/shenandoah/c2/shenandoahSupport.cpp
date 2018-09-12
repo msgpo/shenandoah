@@ -166,8 +166,10 @@ bool ShenandoahBarrierNode::needs_barrier_impl(PhaseGVN* phase, ShenandoahBarrie
       n->Opcode() == Op_LoadN ||
       n->Opcode() == Op_GetAndSetP ||
       n->Opcode() == Op_CompareAndExchangeP ||
+      n->Opcode() == Op_ShenandoahCompareAndExchangeP ||
       n->Opcode() == Op_GetAndSetN ||
-      n->Opcode() == Op_CompareAndExchangeN) {
+      n->Opcode() == Op_CompareAndExchangeN ||
+      n->Opcode() == Op_ShenandoahCompareAndExchangeN) {
     return true;
   }
   if (n->Opcode() == Op_DecodeN ||

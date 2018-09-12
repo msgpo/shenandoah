@@ -434,8 +434,19 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, Register a
                                                 Register result) {
 
   if (!ShenandoahCASBarrier) {
-    BarrierSetAssembler::cmpxchg_oop(masm, addr, expected, new_val, acquire, release, weak, encode,
-                                     tmp1, tmp2, tmp3, result);
+    if (UseCompressedOops) {
+      if (encode) {
+        __ encode_heap_oop(tmp1, expected);
+        expected = tmp1;
+        __ encode_heap_oop(tmp3, new_val);
+        new_val = tmp3;
+      }
+      __ cmpxchg(addr, expected, new_val, Assembler::word, /* acquire*/ true, /* release*/ true, /* weak*/ false, rscratch1);
+      __ membar(__ AnyAny);
+    } else {
+      __ cmpxchg(addr, expected, new_val, Assembler::xword, /* acquire*/ true, /* release*/ true, /* weak*/ false, rscratch1);
+      __ membar(__ AnyAny);
+    }
     return;
   }
 

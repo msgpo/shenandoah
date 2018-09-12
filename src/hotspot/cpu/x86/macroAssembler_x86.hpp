@@ -772,9 +772,6 @@ class MacroAssembler: public Assembler {
 
   void cmpxchgptr(Register reg, Address adr);
 
-  void cmpxchg_oop(Register res, Address addr, Register oldval, Register newval,
-                   bool exchange, bool encode, Register tmp1, Register tmp2);
-
   void xchg_oop(Register obj, Address addr, Register tmp);
 
   void locked_cmpxchgptr(Register reg, AddressLiteral adr);

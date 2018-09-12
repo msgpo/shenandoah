@@ -601,12 +601,37 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, DecoratorS
   Unimplemented();
 }
 #else
-void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, DecoratorSet decorators,
+void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
                                                 Register res, Address addr, Register oldval, Register newval,
                                                 bool exchange, bool encode, Register tmp1, Register tmp2) {
-
   if (!ShenandoahCASBarrier) {
-    BarrierSetAssembler::cmpxchg_oop(masm, decorators, res, addr, oldval, newval, exchange, encode, tmp1, tmp2);
+#ifdef _LP64
+    if (UseCompressedOops) {
+      if (encode) {
+        __ encode_heap_oop(oldval);
+        __ mov(rscratch1, newval);
+        __ encode_heap_oop(rscratch1);
+        newval = rscratch1;
+      }
+      if (os::is_MP()) {
+        __ lock();
+      }
+      // oldval (rax) is implicitly used by this instruction
+      __ cmpxchgl(newval, addr);
+    } else
+#endif
+      {
+        if (os::is_MP()) {
+          __ lock();
+        }
+        __ cmpxchgptr(newval, addr);
+      }
+
+    if (!exchange) {
+      assert(res != NULL, "need result register");
+      __ setb(Assembler::equal, res);
+      __ movzbl(res, res);
+    }
     return;
   }
 

@@ -2951,6 +2951,12 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_CompareAndExchangeL:
   case Op_CompareAndExchangeP:
   case Op_CompareAndExchangeN:
+  case Op_ShenandoahCompareAndSwapP:
+  case Op_ShenandoahCompareAndSwapN:
+  case Op_ShenandoahWeakCompareAndSwapN:
+  case Op_ShenandoahWeakCompareAndSwapP:
+  case Op_ShenandoahCompareAndExchangeP:
+  case Op_ShenandoahCompareAndExchangeN:
   case Op_GetAndAddS:
   case Op_GetAndAddB:
   case Op_GetAndAddI:

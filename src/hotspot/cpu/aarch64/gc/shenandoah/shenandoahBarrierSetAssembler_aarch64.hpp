@@ -27,8 +27,11 @@
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/barrierSetAssembler.hpp"
 #ifdef COMPILER1
-#include "c1/c1_LIRAssembler.hpp"
-#include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
+class LIR_Assembler;
+class ShenandoahPreBarrierStub;
+class ShenandoahWriteBarrierStub;
+class StubAssembler;
+class StubCodeGenerator;
 #endif
 
 class ShenandoahBarrierSetAssembler: public BarrierSetAssembler {
@@ -92,10 +95,10 @@ public:
                              Register t2,
                              Label& slow_case);
 
-  virtual void cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
-                           bool acquire, bool release, bool weak, bool encode,
-                           Register tmp1, Register tmp2, Register tmp3,
-                           Register result);
+  void cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
+                   bool acquire, bool release, bool weak, bool encode,
+                   Register tmp1, Register tmp2, Register tmp3 = rscratch2,
+                   Register result = noreg);
 
   virtual void barrier_stubs_init();
 };

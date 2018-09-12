@@ -2390,14 +2390,6 @@ void MacroAssembler::cmpxchg(Register addr, Register expected,
   }
 }
 
-void MacroAssembler::cmpxchg_oop(Register addr, Register expected, Register new_val,
-                                 bool acquire, bool release, bool weak, bool encode,
-                                 Register tmp1, Register tmp2,
-                                 Register tmp3, Register result) {
-  BarrierSetAssembler* bsa = BarrierSet::barrier_set()->barrier_set_assembler();
-  bsa->cmpxchg_oop(this, addr, expected, new_val, acquire, release, weak, encode, tmp1, tmp2, tmp3, result);
-}
-
 static bool different(Register a, RegisterOrConstant b, Register c) {
   if (b.is_constant())
     return a != c;

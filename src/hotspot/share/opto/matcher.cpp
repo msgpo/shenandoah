@@ -2283,7 +2283,13 @@ void Matcher::find_shared( Node *n ) {
       case Op_CompareAndSwapI:
       case Op_CompareAndSwapL:
       case Op_CompareAndSwapP:
-      case Op_CompareAndSwapN: {   // Convert trinary to binary-tree
+      case Op_CompareAndSwapN:
+      case Op_ShenandoahCompareAndExchangeP:
+      case Op_ShenandoahCompareAndExchangeN:
+      case Op_ShenandoahWeakCompareAndSwapP:
+      case Op_ShenandoahWeakCompareAndSwapN:
+      case Op_ShenandoahCompareAndSwapP:
+      case Op_ShenandoahCompareAndSwapN: {   // Convert trinary to binary-tree
         Node *newval = n->in(MemNode::ValueIn );
         Node *oldval  = n->in(LoadStoreConditionalNode::ExpectedIn);
         Node *pair = new BinaryNode( oldval, newval );
@@ -2526,7 +2532,13 @@ bool Matcher::post_store_load_barrier(const Node* vmb) {
         xop == Op_CompareAndSwapL ||
         xop == Op_CompareAndSwapP ||
         xop == Op_CompareAndSwapN ||
-        xop == Op_CompareAndSwapI) {
+        xop == Op_CompareAndSwapI ||
+        xop == Op_ShenandoahCompareAndExchangeP ||
+        xop == Op_ShenandoahCompareAndExchangeN ||
+        xop == Op_ShenandoahWeakCompareAndSwapP ||
+        xop == Op_ShenandoahWeakCompareAndSwapN ||
+        xop == Op_ShenandoahCompareAndSwapN ||
+        xop == Op_ShenandoahCompareAndSwapP) {
       return true;
     }
 

@@ -323,38 +323,6 @@ void BarrierSetAssembler::incr_allocated_bytes(MacroAssembler* masm, Register th
 #endif
 }
 
-void BarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, DecoratorSet decorators,
-                                      Register res, Address addr, Register cmpval, Register newval,
-                                      bool exchange, bool encode, Register tmp1, Register tmp2) {
-#ifdef _LP64
-  if (UseCompressedOops) {
-    if (encode) {
-      __ encode_heap_oop(cmpval);
-      __ mov(rscratch1, newval);
-      __ encode_heap_oop(rscratch1);
-      newval = rscratch1;
-    }
-    if (os::is_MP()) {
-      __ lock();
-    }
-    // cmpval (rax) is implicitly used by this instruction
-    __ cmpxchgl(newval, addr);
-  } else
-#endif
-  {
-    if (os::is_MP()) {
-      __ lock();
-    }
-    __ cmpxchgptr(newval, addr);
-  }
-
-  if (!exchange) {
-    assert(res != NULL, "need result register");
-    __ setb(Assembler::equal, res);
-    __ movzbl(res, res);
-  }
-}
-
 void BarrierSetAssembler::xchg_oop(MacroAssembler* masm, DecoratorSet decorators,
                                    Register obj, Address addr, Register tmp) {
 #ifdef _LP64

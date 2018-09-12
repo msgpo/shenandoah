@@ -82,9 +82,6 @@ public:
                              Register t1,
                              Label& slow_case);
 
-  virtual void cmpxchg_oop(MacroAssembler* masm, DecoratorSet decorators,
-                           Register res, Address addr, Register oldval, Register newval,
-                           bool exchange, bool encode, Register tmp1, Register tmp2);
   virtual void xchg_oop(MacroAssembler* masm, DecoratorSet decorators,
                         Register obj, Address addr, Register tmp);
 

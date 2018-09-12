@@ -1926,9 +1926,24 @@ void LIR_Assembler::emit_compare_and_swap(LIR_OpCompareAndSwap* op) {
     assert(newval != addr, "new value and addr must be in different registers");
 
     if ( op->code() == lir_cas_obj) {
-      Register tmp1 = op->tmp1()->as_register();
-      Register tmp2 = op->tmp2()->as_register();
-      __ cmpxchg_oop(NULL, Address(addr, 0), cmpval, newval, true, true, tmp1, tmp2);
+#ifdef _LP64
+      if (UseCompressedOops) {
+        __ encode_heap_oop(cmpval);
+        __ mov(rscratch1, newval);
+        __ encode_heap_oop(rscratch1);
+        if (os::is_MP()) {
+          __ lock();
+        }
+        // cmpval (rax) is implicitly used by this instruction
+        __ cmpxchgl(rscratch1, Address(addr, 0));
+      } else
+#endif
+      {
+        if (os::is_MP()) {
+          __ lock();
+        }
+        __ cmpxchgptr(newval, Address(addr, 0));
+      }
     } else {
       assert(op->code() == lir_cas_int, "lir_cas_int expected");
       if (os::is_MP()) {

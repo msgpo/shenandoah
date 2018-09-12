@@ -79,6 +79,11 @@ ShenandoahBarrierSet::ShenandoahBarrierSet(ShenandoahHeap* heap) :
 {
 }
 
+ShenandoahBarrierSetAssembler* ShenandoahBarrierSet::assembler() {
+  BarrierSetAssembler* const bsa = BarrierSet::barrier_set()->barrier_set_assembler();
+  return reinterpret_cast<ShenandoahBarrierSetAssembler*>(bsa);
+}
+
 void ShenandoahBarrierSet::print_on(outputStream* st) const {
   st->print("ShenandoahBarrierSet");
 }

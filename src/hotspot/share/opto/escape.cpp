@@ -516,6 +516,8 @@ void ConnectionGraph::add_node_to_connection_graph(Node *n, Unique_Node_List *de
     }
     case Op_CompareAndExchangeP:
     case Op_CompareAndExchangeN:
+    case Op_ShenandoahCompareAndExchangeP:
+    case Op_ShenandoahCompareAndExchangeN:
     case Op_GetAndSetP:
     case Op_GetAndSetN: {
       add_objload_to_connection_graph(n, delayed_worklist);
@@ -528,7 +530,11 @@ void ConnectionGraph::add_node_to_connection_graph(Node *n, Unique_Node_List *de
     case Op_WeakCompareAndSwapP:
     case Op_WeakCompareAndSwapN:
     case Op_CompareAndSwapP:
-    case Op_CompareAndSwapN: {
+    case Op_CompareAndSwapN:
+    case Op_ShenandoahWeakCompareAndSwapP:
+    case Op_ShenandoahWeakCompareAndSwapN:
+    case Op_ShenandoahCompareAndSwapP:
+    case Op_ShenandoahCompareAndSwapN: {
       Node* adr = n->in(MemNode::Address);
       const Type *adr_type = igvn->type(adr);
       adr_type = adr_type->make_ptr();
@@ -763,6 +769,12 @@ void ConnectionGraph::add_final_edges(Node *n) {
     case Op_CompareAndSwapN:
     case Op_WeakCompareAndSwapP:
     case Op_WeakCompareAndSwapN:
+    case Op_ShenandoahCompareAndExchangeP:
+    case Op_ShenandoahCompareAndExchangeN:
+    case Op_ShenandoahCompareAndSwapP:
+    case Op_ShenandoahCompareAndSwapN:
+    case Op_ShenandoahWeakCompareAndSwapP:
+    case Op_ShenandoahWeakCompareAndSwapN:
     case Op_GetAndSetP:
     case Op_GetAndSetN: {
       Node* adr = n->in(MemNode::Address);
@@ -776,7 +788,8 @@ void ConnectionGraph::add_final_edges(Node *n) {
       }
 #endif
       if (opcode == Op_GetAndSetP || opcode == Op_GetAndSetN ||
-          opcode == Op_CompareAndExchangeN || opcode == Op_CompareAndExchangeP) {
+          opcode == Op_CompareAndExchangeN || opcode == Op_CompareAndExchangeP ||
+          opcode == Op_ShenandoahCompareAndExchangeN || opcode == Op_ShenandoahCompareAndExchangeP) {
         add_local_var_and_edge(n, PointsToNode::NoEscape, adr, NULL);
       }
       if (   adr_type->isa_oopptr()
@@ -2134,7 +2147,9 @@ bool ConnectionGraph::is_oop_field(Node* n, int offset, bool* unsafe) {
         // Check for unsafe oop field access
         if (n->has_out_with(Op_StoreP, Op_LoadP, Op_StoreN, Op_LoadN) ||
             n->has_out_with(Op_GetAndSetP, Op_GetAndSetN, Op_CompareAndExchangeP, Op_CompareAndExchangeN) ||
-            n->has_out_with(Op_CompareAndSwapP, Op_CompareAndSwapN, Op_WeakCompareAndSwapP, Op_WeakCompareAndSwapN)) {
+            n->has_out_with(Op_CompareAndSwapP, Op_CompareAndSwapN, Op_WeakCompareAndSwapP, Op_WeakCompareAndSwapN) ||
+            n->has_out_with(Op_ShenandoahCompareAndExchangeP) || n->has_out_with(Op_ShenandoahCompareAndExchangeN) ||
+            n->has_out_with(Op_ShenandoahCompareAndSwapP, Op_ShenandoahCompareAndSwapN, Op_ShenandoahWeakCompareAndSwapP, Op_ShenandoahWeakCompareAndSwapN)) {
           bt = T_OBJECT;
           (*unsafe) = true;
         }
@@ -2157,7 +2172,9 @@ bool ConnectionGraph::is_oop_field(Node* n, int offset, bool* unsafe) {
       // Allocation initialization, ThreadLocal field access, unsafe access
       if (n->has_out_with(Op_StoreP, Op_LoadP, Op_StoreN, Op_LoadN) ||
           n->has_out_with(Op_GetAndSetP, Op_GetAndSetN, Op_CompareAndExchangeP, Op_CompareAndExchangeN) ||
-          n->has_out_with(Op_CompareAndSwapP, Op_CompareAndSwapN, Op_WeakCompareAndSwapP, Op_WeakCompareAndSwapN)) {
+          n->has_out_with(Op_CompareAndSwapP, Op_CompareAndSwapN, Op_WeakCompareAndSwapP, Op_WeakCompareAndSwapN) ||
+          n->has_out_with(Op_ShenandoahCompareAndExchangeP) || n->has_out_with(Op_ShenandoahCompareAndExchangeN) ||
+          n->has_out_with(Op_ShenandoahCompareAndSwapP, Op_ShenandoahCompareAndSwapN, Op_ShenandoahWeakCompareAndSwapP, Op_ShenandoahWeakCompareAndSwapN)) {
         bt = T_OBJECT;
       }
     }
