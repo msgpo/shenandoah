@@ -594,7 +594,7 @@ void ShenandoahBarrierSetAssembler::resolve(MacroAssembler* masm, DecoratorSet d
 // Special Shenandoah CAS implementation that handles false negatives
 // due to concurrent evacuation.
 #ifndef _LP64
-void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, DecoratorSet decorators,
+void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
                                                 Register res, Address addr, Register oldval, Register newval,
                                                 bool exchange, bool encode, Register tmp1, Register tmp2) {
   // Shenandoah has no 32-bit version for this.
