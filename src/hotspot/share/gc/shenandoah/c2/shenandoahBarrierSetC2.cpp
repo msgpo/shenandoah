@@ -752,12 +752,13 @@ void ShenandoahBarrierSetC2::clone(GraphKit* kit, Node* src, Node* dst, Node* si
   BarrierSetC2::clone(kit, src, dst, size, is_array);
 }
 
-Node* ShenandoahBarrierSetC2::resolve_for_read(GraphKit* kit, Node* n) const {
+Node* ShenandoahBarrierSetC2::resolve(GraphKit* kit, Node* n, DecoratorSet decorators) const {
+  bool is_write = decorators & ACCESS_WRITE;
+  if (is_write) {
+    return shenandoah_write_barrier(kit, n);
+  } else {
   return shenandoah_read_barrier(kit, n);
-}
-
-Node* ShenandoahBarrierSetC2::resolve_for_write(GraphKit* kit, Node* n) const {
-  return shenandoah_write_barrier(kit, n);
+  }
 }
 
 void ShenandoahBarrierSetC2::resolve_for_obj_equals(GraphKit* kit, Node*& a, Node*& b) const {

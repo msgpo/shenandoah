@@ -189,13 +189,7 @@ public:
 
   virtual void clone(GraphKit* kit, Node* src, Node* dst, Node* size, bool is_array) const;
 
-  virtual Node* resolve_for_read(GraphKit* kit, Node* n) const {
-    return n;
-  }
-
-  virtual Node* resolve_for_write(GraphKit* kit, Node* n) const {
-    return n;
-  }
+  virtual Node* resolve(GraphKit* kit, Node* n, DecoratorSet decorators) const { return n; }
 
   virtual void resolve_for_obj_equals(GraphKit* kit, Node*& a, Node*& b) const {}
 
