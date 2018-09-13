@@ -1687,7 +1687,7 @@ bool LibraryCallKit::inline_string_getCharsU() {
 
   if (!stopped()) {
     src = access_resolve(src, ACCESS_READ);
-    dst = access_resolve(dst, ACCESS_READ);
+    dst = access_resolve(dst, ACCESS_WRITE);
 
     // Calculate starting addresses.
     Node* src_start = array_element_address(src, src_begin, T_BYTE);
@@ -4190,6 +4190,12 @@ bool LibraryCallKit::inline_unsafe_copyMemory() {
   assert(Unsafe_field_offset_to_byte_offset(11) == 11,
          "fieldOffset must be byte-scaled");
 
+  // TODO: We shouldn't strictly need explicit barriers here because
+  // make_unsafe_address() would insert them? However, it blows up
+  // jmh-specjvm with -XX:+ShenandoahVerifyOptoBarriers.
+  src_ptr = access_resolve(src_ptr, ACCESS_READ);
+  dst_ptr = access_resolve(dst_ptr, ACCESS_WRITE);
+
   Node* src = make_unsafe_address(src_ptr, src_off, false);
   Node* dst = make_unsafe_address(dst_ptr, dst_off, true);
 
@@ -5350,6 +5356,12 @@ bool LibraryCallKit::inline_vectorizedMismatch() {
 
   Node* call;
   jvms()->set_should_reexecute(true);
+
+  // TODO: We shouldn't strictly need explicit barriers here because
+  // make_unsafe_address() would insert them? However, it blows up
+  // jmh-specjvm with -XX:+ShenandoahVerifyOptoBarriers.
+  obja = access_resolve(obja, ACCESS_READ);
+  objb = access_resolve(objb, ACCESS_READ);
 
   Node* obja_adr = make_unsafe_address(obja, aoffset, false);
   Node* objb_adr = make_unsafe_address(objb, boffset, false);
