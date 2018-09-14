@@ -191,6 +191,8 @@ public:
 
   virtual Node* resolve(GraphKit* kit, Node* n, DecoratorSet decorators) const { return n; }
 
+  virtual Node* ideal_node(PhaseGVN *phase, Node* n, bool can_reshape) const { return NULL; }
+
   virtual void resolve_for_obj_equals(GraphKit* kit, Node*& a, Node*& b) const {}
 
   // These are general helper methods used by C2
