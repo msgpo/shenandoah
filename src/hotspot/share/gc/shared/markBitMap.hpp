@@ -88,13 +88,9 @@ public:
   inline bool par_mark(HeapWord* addr);
   inline bool par_mark(oop obj);
 
+  void clear();
   void clear_range(MemRegion mr);
   void clear_range_large(MemRegion mr);
-
-  // Copies a part of the 'other' bitmap into the corresponding part of this bitmap.
-  void copy_from(MarkBitMap* other, MemRegion mr);
-
-  MemRegion covered() const { return _covered; }
 };
 
 #endif // SHARE_VM_GC_SHARED_MARKBITMAP_HPP

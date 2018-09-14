@@ -44,6 +44,10 @@ void MarkBitMap::initialize(MemRegion heap, MemRegion storage) {
   _bm = BitMapView((BitMap::bm_word_t*) storage.start(), _covered.word_size() >> _shifter);
 }
 
+void MarkBitMap::clear() {
+  clear_range_large(_covered);
+}
+
 void MarkBitMap::clear_range(MemRegion mr) {
   MemRegion intersection = mr.intersection(_covered);
   assert(!intersection.is_empty(),
@@ -68,13 +72,4 @@ void MarkBitMap::clear_range_large(MemRegion mr) {
   // convert address range into offset range
   _bm.clear_large_range(addr_to_offset(intersection.start()),
                         addr_to_offset(intersection.end()));
-}
-
-void MarkBitMap::copy_from(MarkBitMap* other, MemRegion mr) {
-  guarantee(_covered.start() == other->_covered.start(), "bitmaps must cover same region");
-  guarantee(_covered.end() == other->_covered.end(), "bitmaps must cover same region");
-  MemRegion intersection = mr.intersection(_covered);
-  size_t start_offset = addr_to_offset(intersection.start());
-  size_t end_offset = addr_to_offset(intersection.end());
-  _bm.copy_from(other->_bm, start_offset, end_offset);
 }
