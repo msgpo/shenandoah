@@ -50,7 +50,7 @@ void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
 
 LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
   BasicType bt = access.type();
-  if (bt == T_OBJECT || bt == T_ARRAY) {
+  if (ShenandoahCASBarrier && (bt == T_OBJECT || bt == T_ARRAY)) {
     LIRGenerator *gen = access.gen();
     cmp_value.load_item_force(FrameMap::rax_oop_opr);
     new_value.load_item();
