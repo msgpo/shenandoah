@@ -38,6 +38,7 @@ import sun.jvm.hotspot.gc.epsilon.*;
 import sun.jvm.hotspot.gc.g1.*;
 import sun.jvm.hotspot.gc.shenandoah.*;
 import sun.jvm.hotspot.gc.parallel.*;
+import sun.jvm.hotspot.gc.z.*;
 import sun.jvm.hotspot.memory.*;
 import sun.jvm.hotspot.runtime.*;
 import sun.jvm.hotspot.types.*;
@@ -374,6 +375,10 @@ public class ObjectHeap {
     } else if (heap instanceof ShenandoahHeap) {
         ShenandoahHeap sh = (ShenandoahHeap) heap;
         sh.heapRegionIterate(lrc);
+    } else if (heap instanceof ZCollectedHeap) {
+       // Operation (currently) not supported with ZGC. Print
+       // a warning and leave the list of live regions empty.
+       System.err.println("Warning: Operation not supported with ZGC");
     } else if (heap instanceof EpsilonHeap) {
        EpsilonHeap eh = (EpsilonHeap) heap;
        liveRegions.add(eh.space().top());

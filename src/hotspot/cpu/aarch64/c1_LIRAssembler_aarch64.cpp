@@ -1568,6 +1568,7 @@ void LIR_Assembler::emit_compare_and_swap(LIR_OpCompareAndSwap* op) {
   }
   Register newval = as_reg(op->new_value());
   Register cmpval = as_reg(op->cmp_value());
+
   if (op->code() == lir_cas_obj) {
     if (UseCompressedOops) {
       Register t1 = op->tmp1()->as_register();

@@ -42,7 +42,6 @@ public:
 
     init_mark_gross,
     init_mark,
-    accumulate_stats,
     make_parsable,
     clear_liveness,
 
@@ -173,7 +172,6 @@ public:
     init_traversal_gc_gross,
     init_traversal_gc,
     traversal_gc_prepare,
-    traversal_gc_accumulate_stats,
     traversal_gc_make_parsable,
     traversal_gc_resize_tlabs,
 

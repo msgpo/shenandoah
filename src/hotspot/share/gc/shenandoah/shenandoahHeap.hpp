@@ -579,7 +579,6 @@ private:
 
 public:
   void make_parsable(bool retire_tlabs);
-  void accumulate_statistics_tlabs();
   void resize_tlabs();
 
   GCMemoryManager* cycle_memory_manager() { return &_cycle_memory_manager; }

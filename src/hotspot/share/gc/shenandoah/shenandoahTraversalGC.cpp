@@ -365,11 +365,6 @@ void ShenandoahTraversalGC::prepare() {
   _heap->collection_set()->clear();
   assert(_heap->collection_set()->count() == 0, "collection set not clear");
 
-  if (UseTLAB) {
-    ShenandoahGCPhase phase(ShenandoahPhaseTimings::traversal_gc_accumulate_stats);
-    _heap->accumulate_statistics_tlabs();
-  }
-
   {
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::traversal_gc_make_parsable);
     _heap->make_parsable(true);

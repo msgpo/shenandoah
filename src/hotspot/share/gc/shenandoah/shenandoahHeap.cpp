@@ -1042,10 +1042,6 @@ void ShenandoahHeap::resize_tlabs() {
   CollectedHeap::resize_all_tlabs();
 }
 
-void ShenandoahHeap::accumulate_statistics_tlabs() {
-  CollectedHeap::accumulate_statistics_all_tlabs();
-}
-
 class ShenandoahEvacuateUpdateRootsTask : public AbstractGangTask {
   ShenandoahRootEvacuator* _rp;
 public:
@@ -1403,11 +1399,6 @@ void ShenandoahHeap::op_init_mark() {
 
   if (ShenandoahVerify) {
     verifier()->verify_before_concmark();
-  }
-
-  {
-    ShenandoahGCPhase phase(ShenandoahPhaseTimings::accumulate_stats);
-    accumulate_statistics_tlabs();
   }
 
   set_concurrent_mark_in_progress(true);

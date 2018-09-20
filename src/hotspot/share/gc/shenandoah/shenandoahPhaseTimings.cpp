@@ -132,7 +132,6 @@ void ShenandoahPhaseTimings::init_phase_names() {
   _phase_names[final_mark_gross]                = "Pause Final Mark (G)";
   _phase_names[final_evac]                      = "Pause Final Evac (N)";
   _phase_names[final_evac_gross]                = "Pause Final Evac (G)";
-  _phase_names[accumulate_stats]                = "  Accumulate Stats";
   _phase_names[make_parsable]                   = "  Make Parsable";
   _phase_names[clear_liveness]                  = "  Clear Liveness";
   _phase_names[resize_tlabs]                    = "  Resize TLABs";
@@ -269,7 +268,6 @@ void ShenandoahPhaseTimings::init_phase_names() {
   _phase_names[init_traversal_gc_gross]           = "Pause Init Traversal (G)";
   _phase_names[init_traversal_gc]                 = "Pause Init Traversal (N)";
   _phase_names[traversal_gc_prepare]              = "  Prepare";
-  _phase_names[traversal_gc_accumulate_stats]     = "    Accumulate Stats";
   _phase_names[traversal_gc_make_parsable]        = "    Make Parsable";
   _phase_names[traversal_gc_resize_tlabs]         = "    Resize TLABs";
   _phase_names[init_traversal_gc_work]            = "  Work";
