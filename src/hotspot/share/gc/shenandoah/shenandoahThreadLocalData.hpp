@@ -26,7 +26,6 @@
 
 #include "gc/shared/plab.hpp"
 #include "gc/shared/satbMarkQueue.hpp"
-#include "gc/shenandoah/brooksPointer.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "runtime/thread.hpp"
 #include "utilities/debug.hpp"
