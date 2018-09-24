@@ -173,9 +173,7 @@ public:
   static bool expand(Compile* C, PhaseIterGVN& igvn, int& loop_opts_cnt);
   static bool is_gc_state_load(Node *n);
   static bool is_heap_state_test(Node* iff, int mask);
-  static bool is_evacuation_in_progress_test(Node* iff);
   static bool is_heap_stable_test(Node* iff);
-  static Node* evacuation_in_progress_test_ctrl(Node* iff);
   static bool try_common_gc_state_load(Node *n, PhaseIdealLoop *phase);
   static bool has_safepoint_between(Node* start, Node* stop, PhaseIdealLoop *phase);
 
@@ -193,32 +191,17 @@ public:
   void pin_and_expand_helper(PhaseIdealLoop* phase);
   static Node* find_bottom_mem(Node* ctrl, PhaseIdealLoop* phase);
   static void follow_barrier_uses(Node* n, Node* ctrl, Unique_Node_List& uses, PhaseIdealLoop* phase);
-  static void test_heap_stable(Node* ctrl, Node* raw_mem, Node*& gc_state, Node*& heap_stable,
-                               Node*& heap_not_stable, PhaseIdealLoop* phase);
-  static void test_evacuation_in_progress(Node* ctrl, Node* val, Node*& raw_mem,
-                                          Node*& evac_in_progress, Node*& evac_not_in_progress,
-                                          Node*& heap_stable, Node*& null_val,
-                                          PhaseIdealLoop* phase);
-  static void evacuation_not_in_progress(Node* c, Node* v, Node* unc_ctrl, Node* raw_mem, Node* wb_mem, Node* region,
-                                         Node* val_phi, Node* mem_phi, Node* raw_mem_phi, Node*& unc_region,
-                                         PhaseIdealLoop* phase);
-  static void evacuation_in_progress(Node* c, Node* val, Node* evacuation_iff, Node* unc, Node* unc_ctrl,
-                                     Node* raw_mem, Node* wb_mem, Node* region, Node* val_phi, Node* mem_phi,
-                                     Node* raw_mem_phi, Node* unc_region, int alias, Unique_Node_List& uses,
-                                     PhaseIdealLoop* phase);
-  static void heap_stable(Node* c, Node* val, Node* unc_ctrl, Node* raw_mem, Node* wb_mem, Node* region,
-                          Node* val_phi, Node* mem_phi, Node* raw_mem_phi, Node* unc_region, PhaseIdealLoop* phase);
-  static Node* clone_null_check(Node*& c, Node* val, Node* unc_ctrl, Node* unc_region, uint input,
-                                PhaseIdealLoop* phase);
-  static void fix_null_check(Node* dom, Node* unc, Node* unc_ctrl, Node* unc_region, Unique_Node_List& uses,
+  static void test_null(Node*& ctrl, Node* val, Node*& null_ctrl, PhaseIdealLoop* phase);
+
+  static void test_heap_stable(Node*& ctrl, Node* raw_mem, Node*& heap_stable_ctrl,
+                               PhaseIdealLoop* phase);
+  static void call_wb_stub(Node*& ctrl, Node*& val, Node*& result_mem,
+                           Node* raw_mem, Node* wb_mem, int alias,
+                           PhaseIdealLoop* phase);
+  static Node* clone_null_check(Node*& c, Node* val, Node* unc_ctrl, PhaseIdealLoop* phase);
+  static void fix_null_check(Node* unc, Node* unc_ctrl, Node* new_unc_ctrl, Unique_Node_List& uses,
                              PhaseIdealLoop* phase);
-  static void evacuation_not_in_progress_null_check(Node*& c, Node*& val, Node* unc_ctrl, Node*& unc_region,
-                                                    PhaseIdealLoop* phase);
-  static void evacuation_in_progress_null_check(Node*& c, Node*& val, Node* evacuation_iff, Node* unc, Node* unc_ctrl,
-                                                Node* unc_region, Unique_Node_List& uses, PhaseIdealLoop* phase);
-  static void in_cset_fast_test(Node*& c, Node* rbtrue, Node* raw_mem, Node* wb_mem, Node* region, Node* val_phi,
-                                Node* mem_phi, Node* raw_mem_phi, PhaseIdealLoop* phase);
-  static void move_evacuation_test_out_of_loop(IfNode* iff, PhaseIdealLoop* phase);
+  static void in_cset_fast_test(Node*& ctrl, Node*& not_cset_ctrl, Node* val, Node* raw_mem, PhaseIdealLoop* phase);
   static void move_heap_stable_test_out_of_loop(IfNode* iff, PhaseIdealLoop* phase);
 
   static void optimize_after_expansion(VectorSet &visited, Node_Stack &nstack, Node_List &old_new, PhaseIdealLoop* phase);
