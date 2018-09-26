@@ -71,7 +71,6 @@ public:
     Register t1,                       // temp register
     Label&   slow_case                 // continuation point if fast allocation fails
   );
-
   virtual void barrier_stubs_init() {}
 };
 
