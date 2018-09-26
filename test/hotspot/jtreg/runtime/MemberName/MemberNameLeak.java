@@ -75,6 +75,7 @@ public class MemberNameLeak {
         // Run this Leak class with logging
         ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
                                       "-Xlog:membername+table=trace",
+                                      "-XX:+UnlockExperimentalVMOptions",
                                       "-XX:-ExplicitGCInvokesConcurrent",
                                       "-XX:+UnlockDiagnosticVMOptions",
                                       "-XX:+WhiteBoxAPI",
