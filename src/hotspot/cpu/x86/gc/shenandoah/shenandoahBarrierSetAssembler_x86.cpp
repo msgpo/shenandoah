@@ -732,12 +732,6 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
 }
 #endif // LP64
 
-void ShenandoahBarrierSetAssembler::xchg_oop(MacroAssembler* masm, DecoratorSet decorators,
-                                             Register obj, Address addr, Register tmp) {
-  storeval_barrier(masm, obj, tmp);
-  BarrierSetAssembler::xchg_oop(masm, decorators, obj, addr, tmp);
-}
-
 #ifdef COMPILER1
 
 #undef __

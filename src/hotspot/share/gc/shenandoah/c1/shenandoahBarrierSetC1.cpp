@@ -31,6 +31,10 @@
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 #include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
 
+#ifndef PATCHED_ADDR
+#define PATCHED_ADDR  (max_jint)
+#endif
+
 #ifdef ASSERT
 #define __ gen->lir(__FILE__, __LINE__)->
 #else
@@ -197,10 +201,49 @@ LIR_Opr ShenandoahBarrierSetC1::storeval_barrier(LIRGenerator* gen, LIR_Opr obj,
   return obj;
 }
 
-void ShenandoahBarrierSetC1::store_at(LIRAccess& access, LIR_Opr value) {
-  access.set_base(write_barrier(access.gen(), access.base().item().result(), access.access_emit_info(), access.needs_null_check()));
-  LIR_Opr resolved = resolve_address(access, false);
-  access.set_resolved_addr(resolved);
+LIR_Opr ShenandoahBarrierSetC1::resolve_address(LIRAccess& access, bool resolve_in_register) {
+  DecoratorSet decorators = access.decorators();
+  bool is_array = (decorators & IS_ARRAY) != 0;
+  bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
+
+  bool is_write = (decorators & ACCESS_WRITE) != 0;
+  bool needs_null_check = (decorators & IS_NOT_NULL) == 0;
+
+  LIR_Opr base = access.base().item().result();
+  LIR_Opr offset = access.offset().opr();
+  LIRGenerator* gen = access.gen();
+
+  if (is_write) {
+    base = write_barrier(gen, base, access.access_emit_info(), needs_null_check);
+  } else {
+    base = read_barrier(gen, base, access.access_emit_info(), needs_null_check);
+  }
+
+  LIR_Opr addr_opr;
+  if (is_array) {
+    addr_opr = LIR_OprFact::address(gen->emit_array_address(base, offset, access.type()));
+  } else if (needs_patching) {
+    // we need to patch the offset in the instruction so don't allow
+    // generate_address to try to be smart about emitting the -1.
+    // Otherwise the patching code won't know how to find the
+    // instruction to patch.
+    addr_opr = LIR_OprFact::address(new LIR_Address(base, PATCHED_ADDR, access.type()));
+  } else {
+    addr_opr = LIR_OprFact::address(gen->generate_address(base, offset, 0, 0, access.type()));
+  }
+
+  if (resolve_in_register) {
+    LIR_Opr resolved_addr = gen->new_pointer_register();
+    __ leal(addr_opr, resolved_addr);
+    resolved_addr = LIR_OprFact::address(new LIR_Address(resolved_addr, access.type()));
+    return resolved_addr;
+  } else {
+    return addr_opr;
+  }
+}
+
+
+void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
   if (access.is_oop()) {
     if (ShenandoahSATBBarrier) {
       pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), access.resolved_addr(), LIR_OprFact::illegalOpr /* pre_val */);
@@ -210,13 +253,8 @@ void ShenandoahBarrierSetC1::store_at(LIRAccess& access, LIR_Opr value) {
   BarrierSetC1::store_at_resolved(access, value);
 }
 
-void ShenandoahBarrierSetC1::load_at(LIRAccess& access, LIR_Opr result) {
-  LIRItem& base_item = access.base().item();
-  access.set_base(read_barrier(access.gen(), access.base().item().result(), access.access_emit_info(), access.needs_null_check()));
-  LIR_Opr resolved = resolve_address(access, false);
-  access.set_resolved_addr(resolved);
+void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result) {
   BarrierSetC1::load_at_resolved(access, result);
-  access.set_base(base_item);
 
   if (ShenandoahKeepAliveBarrier) {
     DecoratorSet decorators = access.decorators();
@@ -240,38 +278,7 @@ void ShenandoahBarrierSetC1::load_at(LIRAccess& access, LIR_Opr result) {
   }
 }
 
-LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
-  access.load_address();
-  access.set_base(write_barrier(access.gen(), access.base().item().result(), access.access_emit_info(), access.needs_null_check()));
-  LIR_Opr resolved = resolve_address(access, true);
-  access.set_resolved_addr(resolved);
-  if (access.is_oop()) {
-    if (ShenandoahSATBBarrier) {
-      pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), access.resolved_addr(),
-                  LIR_OprFact::illegalOpr /* pre_val */);
-    }
-  }
-  return atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
-}
-
-LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at(LIRAccess& access, LIRItem& value) {
-  access.set_base(write_barrier(access.gen(), access.base().item().result(), access.access_emit_info(), access.needs_null_check()));
-  LIR_Opr resolved = resolve_address(access, true);
-  access.set_resolved_addr(resolved);
-  if (access.is_oop()) {
-    if (ShenandoahSATBBarrier) {
-      pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), access.resolved_addr(),
-                  LIR_OprFact::illegalOpr /* pre_val */);
-    }
-  }
-  return BarrierSetC1::atomic_xchg_at_resolved(access, value);
-}
-
-LIR_Opr ShenandoahBarrierSetC1::atomic_add_at(LIRAccess& access, LIRItem& value) {
-  access.load_address();
-  access.set_base(write_barrier(access.gen(), access.base().item().result(), access.access_emit_info(), access.needs_null_check()));
-  LIR_Opr resolved = resolve_address(access, true);
-  access.set_resolved_addr(resolved);
+LIR_Opr ShenandoahBarrierSetC1::atomic_add_at_resolved(LIRAccess& access, LIRItem& value) {
   return BarrierSetC1::atomic_add_at_resolved(access, value);
 }
 

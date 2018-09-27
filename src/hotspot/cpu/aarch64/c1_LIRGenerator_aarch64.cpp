@@ -710,8 +710,9 @@ LIR_Opr LIRGenerator::atomic_cmpxchg(BasicType type, LIR_Opr addr, LIRItem& cmp_
   LIR_Opr ill = LIR_OprFact::illegalOpr;  // for convenience
   new_value.load_item();
   cmp_value.load_item();
+  LIR_Opr result = new_register(T_INT);
   if (type == T_OBJECT || type == T_ARRAY) {
-    __ cas_obj(addr, cmp_value.result(), new_value.result(), new_register(T_INT), new_register(T_INT));
+    __ cas_obj(addr, cmp_value.result(), new_value.result(), new_register(T_INT), new_register(T_INT), result);
   } else if (type == T_INT) {
     __ cas_int(addr->as_address_ptr()->base(), cmp_value.result(), new_value.result(), ill, ill);
   } else if (type == T_LONG) {
@@ -720,9 +721,7 @@ LIR_Opr LIRGenerator::atomic_cmpxchg(BasicType type, LIR_Opr addr, LIRItem& cmp_
     ShouldNotReachHere();
     Unimplemented();
   }
-  LIR_Opr result = new_register(T_INT);
-  __ cmove(lir_cond_equal, LIR_OprFact::intConst(1), LIR_OprFact::intConst(0),
-           result, type);
+  __ logical_xor(FrameMap::r8_opr, LIR_OprFact::intConst(1), result);
   return result;
 }
 

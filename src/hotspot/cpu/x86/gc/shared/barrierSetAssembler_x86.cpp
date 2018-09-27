@@ -322,18 +322,3 @@ void BarrierSetAssembler::incr_allocated_bytes(MacroAssembler* masm, Register th
   __ adcl(Address(thread, in_bytes(JavaThread::allocated_bytes_offset())+4), 0);
 #endif
 }
-
-void BarrierSetAssembler::xchg_oop(MacroAssembler* masm, DecoratorSet decorators,
-                                   Register obj, Address addr, Register tmp) {
-#ifdef _LP64
-    if (UseCompressedOops) {
-      __ encode_heap_oop(obj);
-      __ xchgl(obj, addr);
-      __ decode_heap_oop(obj);
-    } else {
-      __ xchgptr(obj, addr);
-    }
-#else
-    __ xchgl(obj, addr);
-#endif
-}

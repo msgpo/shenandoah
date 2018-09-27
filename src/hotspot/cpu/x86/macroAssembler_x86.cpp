@@ -3583,11 +3583,6 @@ void MacroAssembler::serialize_memory(Register thread, Register tmp) {
   movl(as_Address(ArrayAddress(page, index)), tmp);
 }
 
-void MacroAssembler::xchg_oop(Register obj, Address addr, Register tmp) {
-  BarrierSetAssembler* bsa = BarrierSet::barrier_set()->barrier_set_assembler();
-  bsa->xchg_oop(this, IN_HEAP, obj, addr, tmp);
-}
-
 void MacroAssembler::safepoint_poll(Label& slow_path, Register thread_reg, Register temp_reg) {
   if (SafepointMechanism::uses_thread_local_poll()) {
 #ifdef _LP64

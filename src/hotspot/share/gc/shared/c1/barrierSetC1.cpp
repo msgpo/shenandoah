@@ -43,26 +43,21 @@ LIR_Opr BarrierSetC1::resolve_address(LIRAccess& access, bool resolve_in_registe
   bool is_array = (decorators & IS_ARRAY) != 0;
   bool needs_patching = (decorators & C1_NEEDS_PATCHING) != 0;
 
-  LIR_Opr base;
-  if (access.base().opr() != NULL) {
-    base = access.base().opr();
-  } else {
-    base = access.base().item().result();
-  }
+  LIRItem& base = access.base().item();
   LIR_Opr offset = access.offset().opr();
   LIRGenerator *gen = access.gen();
 
   LIR_Opr addr_opr;
   if (is_array) {
-    addr_opr = LIR_OprFact::address(gen->emit_array_address(base, offset, access.type()));
+    addr_opr = LIR_OprFact::address(gen->emit_array_address(base.result(), offset, access.type()));
   } else if (needs_patching) {
     // we need to patch the offset in the instruction so don't allow
     // generate_address to try to be smart about emitting the -1.
     // Otherwise the patching code won't know how to find the
     // instruction to patch.
-    addr_opr = LIR_OprFact::address(new LIR_Address(base, PATCHED_ADDR, access.type()));
+    addr_opr = LIR_OprFact::address(new LIR_Address(base.result(), PATCHED_ADDR, access.type()));
   } else {
-    addr_opr = LIR_OprFact::address(gen->generate_address(base, offset, 0, 0, access.type()));
+    addr_opr = LIR_OprFact::address(gen->generate_address(base.result(), offset, 0, 0, access.type()));
   }
 
   if (resolve_in_register) {

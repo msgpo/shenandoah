@@ -96,7 +96,6 @@ public:
   CodeEmitInfo*& patch_emit_info()     { return _patch_emit_info; }
   CodeEmitInfo*& access_emit_info()    { return _access_emit_info; }
   LIRAddressOpr& base()                { return _base; }
-  void set_base(LIRAddressOpr base)    { _base = base; }
   LIRAddressOpr& offset()              { return _offset; }
   BasicType type() const               { return _type; }
   LIR_Opr resolved_addr() const        { return _resolved_addr; }
@@ -104,7 +103,6 @@ public:
   bool is_oop() const                  { return _type == T_ARRAY || _type == T_OBJECT; }
   DecoratorSet decorators() const      { return _decorators; }
   bool is_raw() const                  { return (_decorators & AS_RAW) != 0; }
-  bool needs_null_check() const        { return (_decorators & IS_NOT_NULL) == 0; }
 };
 
 // The BarrierSetC1 class is the main entry point for the GC backend of the Access API in C1.

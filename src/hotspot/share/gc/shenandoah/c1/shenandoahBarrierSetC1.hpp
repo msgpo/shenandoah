@@ -191,19 +191,21 @@ private:
 
   LIR_Opr ensure_in_register(LIRGenerator* gen, LIR_Opr obj);
 
-  virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value);
-
 public:
   CodeBlob* pre_barrier_c1_runtime_code_blob() { return _pre_barrier_c1_runtime_code_blob; }
 
-  virtual void store_at(LIRAccess& access, LIR_Opr value);
-  virtual void load_at(LIRAccess& access, LIR_Opr result);
+protected:
+  virtual LIR_Opr resolve_address(LIRAccess& access, bool resolve_in_register);
 
-  virtual LIR_Opr atomic_cmpxchg_at(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value);
+  virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
+  virtual void load_at_resolved(LIRAccess& access, LIR_Opr result);
 
-  virtual LIR_Opr atomic_xchg_at(LIRAccess& access, LIRItem& value);
-  virtual LIR_Opr atomic_add_at(LIRAccess& access, LIRItem& value);
+  virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value);
 
+  virtual LIR_Opr atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value);
+  virtual LIR_Opr atomic_add_at_resolved(LIRAccess& access, LIRItem& value);
+
+public:
   virtual LIR_Opr resolve(LIRGenerator* gen, DecoratorSet decorators, LIR_Opr obj);
 
   virtual void generate_c1_runtime_stubs(BufferBlob* buffer_blob);

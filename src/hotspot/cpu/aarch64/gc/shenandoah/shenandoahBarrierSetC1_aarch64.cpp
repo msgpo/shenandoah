@@ -45,22 +45,54 @@ void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
 
 LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
   BasicType bt = access.type();
-  if (bt == T_OBJECT || bt == T_ARRAY) {
+  if (access.is_oop()) {
     LIRGenerator *gen = access.gen();
-    cmp_value.load_item();
-    new_value.load_item();
+    if (ShenandoahSATBBarrier) {
+      pre_barrier(gen, access.access_emit_info(), access.decorators(), access.resolved_addr(),
+                  LIR_OprFact::illegalOpr /* pre_val */);
+    }
+    if (ShenandoahCASBarrier) {
+      cmp_value.load_item();
+      new_value.load_item();
 
-    LIR_Opr t1 = gen->new_register(T_OBJECT);
-    LIR_Opr t2 = gen->new_register(T_OBJECT);
-    LIR_Opr addr = access.resolved_addr()->as_address_ptr()->base();
+      LIR_Opr t1 = gen->new_register(T_OBJECT);
+      LIR_Opr t2 = gen->new_register(T_OBJECT);
+      LIR_Opr addr = access.resolved_addr()->as_address_ptr()->base();
 
-    __ append(new LIR_OpShenandoahCompareAndSwap(addr, cmp_value.result(), new_value.result(), t1, t2, LIR_OprFact::illegalOpr));
+      __ append(new LIR_OpShenandoahCompareAndSwap(addr, cmp_value.result(), new_value.result(), t1, t2,
+                                                   LIR_OprFact::illegalOpr));
 
-    LIR_Opr result = gen->new_register(T_INT);
-    __ cmove(lir_cond_equal, LIR_OprFact::intConst(1), LIR_OprFact::intConst(0),
-             result, T_INT);
-    return result;
-  } else {
-    return BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
+      LIR_Opr result = gen->new_register(T_INT);
+      __ cmove(lir_cond_equal, LIR_OprFact::intConst(1), LIR_OprFact::intConst(0),
+               result, T_INT);
+      return result;
+    }
   }
+  return BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
+}
+
+LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value) {
+  LIRGenerator* gen = access.gen();
+  BasicType type = access.type();
+
+  LIR_Opr result = gen->new_register(type);
+  value.load_item();
+  LIR_Opr value_opr = value.result();
+
+  if (access.is_oop()) {
+    value_opr = storeval_barrier(access.gen(), value_opr, access.access_emit_info(), access.decorators());
+  }
+
+  assert(type == T_INT || type == T_OBJECT || type == T_ARRAY LP64_ONLY( || type == T_LONG ), "unexpected type");
+  LIR_Opr tmp = gen->new_register(T_INT);
+  __ xchg(access.resolved_addr(), value_opr, result, tmp);
+
+  if (access.is_oop()) {
+    if (ShenandoahSATBBarrier) {
+      pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), LIR_OprFact::illegalOpr,
+                  result /* pre_val */);
+    }
+  }
+
+  return result;
 }

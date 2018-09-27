@@ -82,9 +82,6 @@ public:
                              Register t1,
                              Label& slow_case);
 
-  virtual void xchg_oop(MacroAssembler* masm, DecoratorSet decorators,
-                        Register obj, Address addr, Register tmp);
-
   virtual void barrier_stubs_init() {}
 };
 

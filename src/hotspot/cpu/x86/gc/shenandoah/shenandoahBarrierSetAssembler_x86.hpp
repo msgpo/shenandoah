@@ -85,9 +85,6 @@ public:
   void cmpxchg_oop(MacroAssembler* masm,
                    Register res, Address addr, Register oldval, Register newval,
                    bool exchange, bool encode, Register tmp1, Register tmp2);
-  virtual void xchg_oop(MacroAssembler* masm, DecoratorSet decorators,
-                        Register obj, Address addr, Register tmp);
-
   virtual void arraycopy_prologue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                   Register src, Register dst, Register count);
   virtual void arraycopy_epilogue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

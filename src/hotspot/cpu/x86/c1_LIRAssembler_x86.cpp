@@ -3982,8 +3982,17 @@ void LIR_Assembler::atomic_op(LIR_Code code, LIR_Opr src, LIR_Opr data, LIR_Opr 
   } else if (data->is_oop()) {
     assert (code == lir_xchg, "xadd for oops");
     Register obj = data->as_register();
-    assert (tmp->is_register(), "should be register");
-    __ xchg_oop(obj, as_Address(src->as_address_ptr()), tmp->as_register());
+#ifdef _LP64
+    if (UseCompressedOops) {
+      __ encode_heap_oop(obj);
+      __ xchgl(obj, as_Address(src->as_address_ptr()));
+      __ decode_heap_oop(obj);
+    } else {
+      __ xchgptr(obj, as_Address(src->as_address_ptr()));
+    }
+#else
+    __ xchgl(obj, as_Address(src->as_address_ptr()));
+#endif
   } else if (data->type() == T_LONG) {
 #ifdef _LP64
     assert(data->as_register_lo() == data->as_register_hi(), "should be a single register");
