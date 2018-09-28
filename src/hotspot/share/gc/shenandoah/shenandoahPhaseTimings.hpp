@@ -61,8 +61,8 @@ class outputStream;
                                                                                         \
   f(resize_tlabs,                                   "  Resize TLABs")                   \
                                                                                         \
-  f(final_mark,                                     "Pause Final Mark (N)")             \
   f(final_mark_gross,                               "Pause Final Mark (G)")             \
+  f(final_mark,                                     "Pause Final Mark (N)")             \
                                                                                         \
   /* Per-thread timer block, should have "roots" counters in consistent order */        \
   f(update_roots,                                   "  Update Roots")                   \
@@ -112,8 +112,8 @@ class outputStream;
   f(evac_string_dedup_queue_roots,                  "    E: String Dedup Queue Roots")  \
   f(evac_finish_queues,                             "    E: Finish Queues")             \
                                                                                         \
-  f(final_evac,                                     "Pause Final Evac (N)")             \
   f(final_evac_gross,                               "Pause Final Evac (G)")             \
+  f(final_evac,                                     "Pause Final Evac (N)")             \
                                                                                         \
   f(init_update_refs_gross,                         "Pause Init  Update Refs (G)")      \
   f(init_update_refs,                               "Pause Init  Update Refs (N)")      \
