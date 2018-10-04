@@ -170,7 +170,7 @@ jint ShenandoahHeap::initialize() {
   }
 
   assert((((size_t) base()) & ShenandoahHeapRegion::region_size_bytes_mask()) == 0,
-         "misaligned heap: "PTR_FORMAT, p2i(base()));
+         "misaligned heap: " PTR_FORMAT, p2i(base()));
 
   ShenandoahBarrierSet::satb_mark_queue_set().set_buffer_size(ShenandoahSATBBufferSize);
 
