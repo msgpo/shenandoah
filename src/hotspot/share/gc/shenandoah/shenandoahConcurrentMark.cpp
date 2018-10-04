@@ -205,7 +205,7 @@ public:
     ShenandoahObjToScanQueue* q = _cm->get_queue(worker_id);
     ReferenceProcessor* rp;
     if (heap->process_references()) {
-      rp = ShenandoahHeap::heap()->ref_processor();
+      rp = heap->ref_processor();
       shenandoah_assert_rp_isalive_installed();
     } else {
       rp = NULL;
@@ -272,7 +272,7 @@ public:
 
     ReferenceProcessor* rp;
     if (heap->process_references()) {
-      rp = ShenandoahHeap::heap()->ref_processor();
+      rp = heap->ref_processor();
       shenandoah_assert_rp_isalive_installed();
     } else {
       rp = NULL;
@@ -338,19 +338,17 @@ void ShenandoahConcurrentMark::update_roots(ShenandoahPhaseTimings::Phase root_p
       ShouldNotReachHere();
   }
 
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-
   ShenandoahGCPhase phase(root_phase);
 
 #if defined(COMPILER2) || INCLUDE_JVMCI
   DerivedPointerTable::clear();
 #endif
 
-  uint nworkers = heap->workers()->active_workers();
+  uint nworkers = _heap->workers()->active_workers();
 
-  ShenandoahRootProcessor root_proc(heap, nworkers, root_phase);
+  ShenandoahRootProcessor root_proc(_heap, nworkers, root_phase);
   ShenandoahUpdateRootsTask update_roots(&root_proc, update_code_cache);
-  heap->workers()->run_task(&update_roots);
+  _heap->workers()->run_task(&update_roots);
 
 #if defined(COMPILER2) || INCLUDE_JVMCI
   DerivedPointerTable::update_pointers();
@@ -392,24 +390,23 @@ void ShenandoahConcurrentMark::concurrent_scan_code_roots(uint worker_id, Refere
 }
 
 void ShenandoahConcurrentMark::mark_from_roots() {
-  ShenandoahHeap* sh = ShenandoahHeap::heap();
-  WorkGang* workers = sh->workers();
+  WorkGang* workers = _heap->workers();
   uint nworkers = workers->active_workers();
 
   ShenandoahGCPhase conc_mark_phase(ShenandoahPhaseTimings::conc_mark);
 
   if (_heap->process_references()) {
-    ReferenceProcessor* rp = sh->ref_processor();
+    ReferenceProcessor* rp = _heap->ref_processor();
     rp->set_active_mt_degree(nworkers);
 
     // enable ("weak") refs discovery
     rp->enable_discovery(true /*verify_no_refs*/);
-    rp->setup_policy(sh->soft_ref_policy()->should_clear_all_soft_refs());
+    rp->setup_policy(_heap->soft_ref_policy()->should_clear_all_soft_refs());
   }
 
   shenandoah_assert_rp_isalive_not_installed();
   ShenandoahIsAliveSelector is_alive;
-  ReferenceProcessorIsAliveMutator fix_isalive(sh->ref_processor(), is_alive.is_alive_closure());
+  ReferenceProcessorIsAliveMutator fix_isalive(_heap->ref_processor(), is_alive.is_alive_closure());
 
   task_queues()->reserve(nworkers);
 
@@ -420,15 +417,13 @@ void ShenandoahConcurrentMark::mark_from_roots() {
     workers->run_task(&task);
   }
 
-  assert(task_queues()->is_empty() || sh->cancelled_gc(), "Should be empty when not cancelled");
+  assert(task_queues()->is_empty() || _heap->cancelled_gc(), "Should be empty when not cancelled");
 }
 
 void ShenandoahConcurrentMark::finish_mark_from_roots(bool full_gc) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
 
-  ShenandoahHeap* sh = ShenandoahHeap::heap();
-
-  uint nworkers = sh->workers()->active_workers();
+  uint nworkers = _heap->workers()->active_workers();
 
   // Finally mark everything else we've got in our queues during the previous steps.
   // It does two different things for concurrent vs. mark-compact GC:
@@ -445,7 +440,7 @@ void ShenandoahConcurrentMark::finish_mark_from_roots(bool full_gc) {
 
     shenandoah_assert_rp_isalive_not_installed();
     ShenandoahIsAliveSelector is_alive;
-    ReferenceProcessorIsAliveMutator fix_isalive(sh->ref_processor(), is_alive.is_alive_closure());
+    ReferenceProcessorIsAliveMutator fix_isalive(_heap->ref_processor(), is_alive.is_alive_closure());
 
     ShenandoahTerminationTracker termination_tracker(full_gc ?
                                                      ShenandoahPhaseTimings::full_gc_mark_termination :
@@ -454,7 +449,7 @@ void ShenandoahConcurrentMark::finish_mark_from_roots(bool full_gc) {
     StrongRootsScope scope(nworkers);
     ShenandoahTaskTerminator terminator(nworkers, task_queues());
     ShenandoahFinalMarkingTask task(this, &terminator, ShenandoahStringDedup::is_enabled());
-    sh->workers()->run_task(&task);
+    _heap->workers()->run_task(&task);
   }
 
   assert(task_queues()->is_empty(), "Should be empty");
@@ -466,7 +461,7 @@ void ShenandoahConcurrentMark::finish_mark_from_roots(bool full_gc) {
 
   // And finally finish class unloading
   if (_heap->unload_classes()) {
-    sh->unload_classes_and_cleanup_tables(full_gc);
+    _heap->unload_classes_and_cleanup_tables(full_gc);
   }
 
   assert(task_queues()->is_empty(), "Should be empty");
@@ -569,8 +564,6 @@ public:
 
 class ShenandoahWeakAssertNotForwardedClosure : public OopClosure {
 private:
-  ShenandoahHeap* const _heap;
-
   template <class T>
   inline void do_oop_work(T* p) {
     T o = RawAccess<>::oop_load(p);
@@ -581,7 +574,7 @@ private:
   }
 
 public:
-  ShenandoahWeakAssertNotForwardedClosure() : _heap(ShenandoahHeap::heap()) {}
+  ShenandoahWeakAssertNotForwardedClosure() {}
 
   void do_oop(narrowOop* p) { do_oop_work(p); }
   void do_oop(oop* p)       { do_oop_work(p); }
@@ -655,8 +648,6 @@ public:
 void ShenandoahConcurrentMark::weak_refs_work(bool full_gc) {
   assert(_heap->process_references(), "sanity");
 
-  ShenandoahHeap* sh = ShenandoahHeap::heap();
-
   ShenandoahPhaseTimings::Phase phase_root =
           full_gc ?
           ShenandoahPhaseTimings::full_gc_weakrefs :
@@ -664,7 +655,7 @@ void ShenandoahConcurrentMark::weak_refs_work(bool full_gc) {
 
   ShenandoahGCPhase phase(phase_root);
 
-  ReferenceProcessor* rp = sh->ref_processor();
+  ReferenceProcessor* rp = _heap->ref_processor();
 
   // NOTE: We cannot shortcut on has_discovered_references() here, because
   // we will miss marking JNI Weak refs then, see implementation in
@@ -677,9 +668,7 @@ void ShenandoahConcurrentMark::weak_refs_work(bool full_gc) {
 }
 
 void ShenandoahConcurrentMark::weak_refs_work_doit(bool full_gc) {
-  ShenandoahHeap* sh = ShenandoahHeap::heap();
-
-  ReferenceProcessor* rp = sh->ref_processor();
+  ReferenceProcessor* rp = _heap->ref_processor();
 
   ShenandoahPhaseTimings::Phase phase_process =
           full_gc ?
@@ -695,17 +684,17 @@ void ShenandoahConcurrentMark::weak_refs_work_doit(bool full_gc) {
   ShenandoahIsAliveSelector is_alive;
   ReferenceProcessorIsAliveMutator fix_isalive(rp, is_alive.is_alive_closure());
 
-  WorkGang* workers = sh->workers();
+  WorkGang* workers = _heap->workers();
   uint nworkers = workers->active_workers();
 
-  rp->setup_policy(sh->soft_ref_policy()->should_clear_all_soft_refs());
+  rp->setup_policy(_heap->soft_ref_policy()->should_clear_all_soft_refs());
   rp->set_active_mt_degree(nworkers);
 
   assert(task_queues()->is_empty(), "Should be empty");
 
   ShenandoahRefProcTaskExecutor executor(workers);
 
-  ReferenceProcessorPhaseTimes pt(sh->gc_timer(), rp->num_queues());
+  ReferenceProcessorPhaseTimes pt(_heap->gc_timer(), rp->num_queues());
 
   {
     ShenandoahGCPhase phase(phase_process);
@@ -725,7 +714,7 @@ void ShenandoahConcurrentMark::weak_refs_work_doit(bool full_gc) {
     // or assert they do not need updating (using serial version) otherwise.
     // Weak processor API requires us to visit the oops, even if we are not doing
     // anything to them.
-    if (sh->has_forwarded_objects()) {
+    if (_heap->has_forwarded_objects()) {
       ShenandoahWeakUpdateClosure cl;
       WeakProcessor::weak_oops_do(workers, is_alive.is_alive_closure(), &cl, 1);
     } else {
@@ -830,11 +819,10 @@ void ShenandoahConcurrentMark::preclean_weak_refs() {
   // that missed the initial filtering, i.e. when referent was marked alive after
   // reference was discovered by RP.
 
-  ShenandoahHeap* sh = ShenandoahHeap::heap();
-  assert(sh->process_references(), "sanity");
+  assert(_heap->process_references(), "sanity");
 
   // Shortcut if no references were discovered to avoid winding up threads.
-  ReferenceProcessor* rp = sh->ref_processor();
+  ReferenceProcessor* rp = _heap->ref_processor();
   if (!rp->has_discovered_references()) {
     return;
   }
@@ -850,7 +838,7 @@ void ShenandoahConcurrentMark::preclean_weak_refs() {
   // Execute precleaning in the worker thread: it will give us GCLABs, String dedup
   // queues and other goodies. When upstream ReferenceProcessor starts supporting
   // parallel precleans, we can extend this to more threads.
-  WorkGang* workers = sh->workers();
+  WorkGang* workers = _heap->workers();
   uint nworkers = workers->active_workers();
   assert(nworkers == 1, "This code uses only a single worker");
   task_queues()->reserve(nworkers);
