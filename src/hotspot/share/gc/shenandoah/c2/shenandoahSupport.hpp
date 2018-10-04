@@ -53,8 +53,6 @@ private:
 #endif
 
 public:
-
-public:
   enum { Control,
          Memory,
          ValueIn
@@ -126,7 +124,6 @@ protected:
 private:
   static bool needs_barrier_impl(PhaseGVN* phase, ShenandoahBarrierNode* orig, Node* n, Node* rb_mem, bool allow_fromspace, Unique_Node_List &visited);
 
-
   static bool dominates_memory(PhaseGVN* phase, Node* b1, Node* b2, bool linear);
   static bool dominates_memory_impl(PhaseGVN* phase, Node* b1, Node* b2, Node* current, bool linear);
 };
@@ -161,7 +158,6 @@ private:
 };
 
 class ShenandoahWriteBarrierNode : public ShenandoahBarrierNode {
-
 public:
   ShenandoahWriteBarrierNode(Compile* C, Node* ctrl, Node* mem, Node* obj);
 
@@ -377,6 +373,5 @@ public:
 
   virtual int Opcode() const;
 };
-
 
 #endif // SHARE_VM_GC_SHENANDOAH_C2_SHENANDOAH_SUPPORT_HPP

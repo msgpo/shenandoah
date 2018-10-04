@@ -27,7 +27,6 @@
 #include "gc/shenandoah/shenandoahSATBMarkQueueSet.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 
-
 ShenandoahSATBMarkQueueSet::ShenandoahSATBMarkQueueSet() : _heap(NULL) {}
 
 void ShenandoahSATBMarkQueueSet::initialize(ShenandoahHeap* const heap,

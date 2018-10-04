@@ -27,17 +27,16 @@
 #include "c1/c1_CodeStubs.hpp"
 #include "gc/shared/c1/barrierSetC1.hpp"
 
-
 class ShenandoahPreBarrierStub: public CodeStub {
   friend class ShenandoahBarrierSetC1;
- private:
+private:
   bool _do_load;
   LIR_Opr _addr;
   LIR_Opr _pre_val;
   LIR_PatchCode _patch_code;
   CodeEmitInfo* _info;
 
- public:
+public:
   // Version that _does_ generate a load of the previous value from addr.
   // addr (the address of the field to be read) must be a LIR_Address
   // pre_val (a temporary register) must be a register;
@@ -88,13 +87,13 @@ class ShenandoahPreBarrierStub: public CodeStub {
 
 class ShenandoahWriteBarrierStub: public CodeStub {
   friend class ShenandoahBarrierSetC1;
- private:
+private:
   LIR_Opr _obj;
   LIR_Opr _result;
   CodeEmitInfo* _info;
   bool _needs_null_check;
 
- public:
+public:
   ShenandoahWriteBarrierStub(LIR_Opr obj, LIR_Opr result, CodeEmitInfo* info, bool needs_null_check) :
     _obj(obj), _result(result), _info(info), _needs_null_check(needs_null_check)
   {
@@ -121,14 +120,14 @@ class ShenandoahWriteBarrierStub: public CodeStub {
 class LIR_OpShenandoahCompareAndSwap : public LIR_Op {
  friend class LIR_OpVisitState;
 
- private:
+private:
   LIR_Opr _addr;
   LIR_Opr _cmp_value;
   LIR_Opr _new_value;
   LIR_Opr _tmp1;
   LIR_Opr _tmp2;
 
- public:
+public:
   LIR_OpShenandoahCompareAndSwap(LIR_Opr addr, LIR_Opr cmp_value, LIR_Opr new_value,
                                  LIR_Opr t1, LIR_Opr t2, LIR_Opr result)
     : LIR_Op(lir_none, result, NULL)  // no info

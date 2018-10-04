@@ -123,7 +123,6 @@ void ShenandoahPhaseTimings::print_summary_sd(outputStream* out, const char* str
   );
 }
 
-
 void ShenandoahPhaseTimings::init_phase_names() {
 #define GC_PHASE_DECLARE_NAME(type, title) \
   _phase_names[type] = title;

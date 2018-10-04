@@ -52,7 +52,6 @@ void ShenandoahWriteBarrierStub::emit_code(LIR_Assembler* ce) {
 }
 
 void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val) {
-
   // First we test whether marking is in progress.
   BasicType flag_type;
   bool patch = (decorators & C1_NEEDS_PATCHING) != 0;
@@ -242,7 +241,6 @@ LIR_Opr ShenandoahBarrierSetC1::resolve_address(LIRAccess& access, bool resolve_
   }
 }
 
-
 void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
   if (access.is_oop()) {
     if (ShenandoahSATBBarrier) {
@@ -305,4 +303,3 @@ void ShenandoahBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) 
                                                               "shenandoah_pre_barrier_slow",
                                                               false, &pre_code_gen_cl);
 }
-
