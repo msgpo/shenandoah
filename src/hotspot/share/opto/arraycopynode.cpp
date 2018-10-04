@@ -36,7 +36,7 @@
 #endif
 
 ArrayCopyNode::ArrayCopyNode(Compile* C, bool alloc_tightly_coupled, bool has_negative_length_guard)
-  : CallNode(arraycopy_type(), NULL, TypeRawPtr::BOTTOM),
+  : CallNode(arraycopy_type(), NULL, TypePtr::BOTTOM),
     _kind(None),
     _alloc_tightly_coupled(alloc_tightly_coupled),
     _has_negative_length_guard(has_negative_length_guard),
@@ -487,7 +487,8 @@ Node* ArrayCopyNode::array_copy_backward(PhaseGVN *phase,
     Node *start_mem_dest = mm->memory_at(alias_idx_dest);
     Node* mem = start_mem_dest;
 
-    assert(copy_type != T_OBJECT SHENANDOAHGC_ONLY(|| ShenandoahStoreValEnqueueBarrier), "only tightly coupled allocations for object arrays");
+    BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+    assert(copy_type != T_OBJECT || !bs->array_copy_requires_gc_barriers(false, T_OBJECT, false, BarrierSetC2::Optimization), "only tightly coupled allocations for object arrays");
     bool same_alias = (alias_idx_src == alias_idx_dest);
 
     if (count > 0) {
