@@ -1699,10 +1699,6 @@ Node* GraphKit::access_resolve(Node* n, DecoratorSet decorators) {
   return _barrier_set->resolve(this, n, decorators);
 }
 
-void GraphKit::access_resolve_for_obj_equals(Node*& a, Node*& b) {
-  return _barrier_set->resolve_for_obj_equals(this, a, b);
-}
-
 //-------------------------array_element_address-------------------------
 Node* GraphKit::array_element_address(Node* ary, Node* idx, BasicType elembt,
                                       const TypeInt* sizetype, Node* ctrl) {

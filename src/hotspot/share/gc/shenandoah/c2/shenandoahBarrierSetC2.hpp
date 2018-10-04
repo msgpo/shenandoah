@@ -108,7 +108,10 @@ public:
 
   virtual Node* resolve(GraphKit* kit, Node* n, DecoratorSet decorators) const;
 
-  virtual void resolve_for_obj_equals(GraphKit* kit, Node*& a, Node*& b) const;
+  virtual Node* obj_allocate(PhaseMacroExpand* macro, Node* ctrl, Node* mem, Node* toobig_false, Node* size_in_bytes,
+                             Node*& i_o, Node*& needgc_ctrl,
+                             Node*& fast_oop_ctrl, Node*& fast_oop_rawmem,
+                             intx prefetch_lines) const;
 
   // These are general helper methods used by C2
   virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const;

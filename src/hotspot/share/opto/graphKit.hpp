@@ -632,8 +632,6 @@ class GraphKit : public Phase {
 
   void access_clone(Node* src, Node* dst, Node* size, bool is_array);
 
-  void access_resolve_for_obj_equals(Node*& a, Node*& b);
-
   Node* access_resolve(Node* n, DecoratorSet decorators);
 
   // Return addressing for an array element.

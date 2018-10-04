@@ -788,16 +788,29 @@ Node* ShenandoahBarrierSetC2::resolve(GraphKit* kit, Node* n, DecoratorSet decor
   }
 }
 
-void ShenandoahBarrierSetC2::resolve_for_obj_equals(GraphKit* kit, Node*& a, Node*& b) const {
-  if (ShenandoahAcmpBarrier) {
-    const Type* a_type = a->bottom_type();
-    const Type* b_type = b->bottom_type();
-    if (!a_type->make_ptr()->higher_equal(TypePtr::NULL_PTR) &&
-        !b_type->make_ptr()->higher_equal(TypePtr::NULL_PTR)) {
-      a = shenandoah_write_barrier(kit, a);
-      b = shenandoah_write_barrier(kit, b);
-    }
-  }
+Node* ShenandoahBarrierSetC2::obj_allocate(PhaseMacroExpand* macro, Node* ctrl, Node* mem, Node* toobig_false, Node* size_in_bytes,
+                                           Node*& i_o, Node*& needgc_ctrl,
+                                           Node*& fast_oop_ctrl, Node*& fast_oop_rawmem,
+                                           intx prefetch_lines) const {
+
+  PhaseIterGVN& igvn = macro->igvn();
+
+  // Allocate several words more for the Shenandoah brooks pointer.
+  size_in_bytes = new AddXNode(size_in_bytes, igvn.MakeConX(BrooksPointer::byte_size()));
+  macro->transform_later(size_in_bytes);
+
+  Node* fast_oop = BarrierSetC2::obj_allocate(macro, ctrl, mem, toobig_false, size_in_bytes,
+                                              i_o, needgc_ctrl, fast_oop_ctrl, fast_oop_rawmem,
+                                              prefetch_lines);
+
+  // Bump up object for Shenandoah brooks pointer.
+  fast_oop = new AddPNode(macro->top(), fast_oop, igvn.MakeConX(BrooksPointer::byte_size()));
+  macro->transform_later(fast_oop);
+
+  // Initialize Shenandoah brooks pointer to point to the object itself.
+  fast_oop_rawmem = macro->make_store(fast_oop_ctrl, fast_oop_rawmem, fast_oop, BrooksPointer::byte_offset(), fast_oop, T_OBJECT);
+
+  return fast_oop;
 }
 
 // Support for GC barriers emitted during parsing
