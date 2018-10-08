@@ -190,4 +190,3 @@ bool CardTableBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_coupled
   bool is_oop = type == T_OBJECT || type == T_ARRAY;
   return is_oop && (!tightly_coupled_alloc || !use_ReduceInitialCardMarks());
 }
-

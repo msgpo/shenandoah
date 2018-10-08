@@ -43,10 +43,6 @@
 #include "opto/runtime.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/sharedRuntime.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahSupport.hpp"
-#endif
 
 //----------------------------GraphKit-----------------------------------------
 // Main utility constructor.
@@ -3861,7 +3857,6 @@ Node* GraphKit::load_String_value(Node* str, bool set_ctrl) {
   const TypeAryPtr* value_type = TypeAryPtr::make(TypePtr::NotNull,
                                                   TypeAry::make(TypeInt::BYTE, TypeInt::POS),
                                                   ciTypeArrayKlass::make(T_BYTE), true, 0);
-
   Node* p = basic_plus_adr(str, str, value_offset);
   Node* load = access_load_at(str, p, value_field_type, value_type, T_OBJECT,
                               IN_HEAP | (set_ctrl ? C2_CONTROL_DEPENDENT_LOAD : 0) | MO_UNORDERED);
@@ -3956,7 +3951,6 @@ void GraphKit::inflate_string(Node* src, Node* dst, const TypeAryPtr* dst_type, 
 }
 
 void GraphKit::inflate_string_slow(Node* src, Node* dst, Node* start, Node* count) {
-
   /**
    * int i_char = start;
    * for (int i_byte = 0; i_byte < count; i_byte++) {

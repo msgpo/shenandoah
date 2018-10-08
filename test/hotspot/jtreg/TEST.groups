@@ -168,7 +168,7 @@ tier2_gc_shenandoah = \
   serviceability/sa/TestHeapDumpForInvokeDynamic.java \
   -gc/shenandoah/ShenandoahStrDedupStress.java \
   -gc/shenandoah/CriticalNativeStress.java
-  
+
 shenandoah_stress = \
   gc/stress/gcold/TestGCOldWithShenandoah.java \
   gc/stress/gcbasher/TestGCBasherWithShenandoah.java \
@@ -180,7 +180,7 @@ shenandoah_stress = \
 tier3_gc_shenandoah = \
   :tier2_gc_shenandoah \
   :shenandoah_stress
-  
+
 tier1_compiler_not_xcomp = \
   compiler/aot \
   compiler/profiling
@@ -193,12 +193,6 @@ ctw_1 = \
   applications/ctw/modules/ \
   -:ctw_2 \
   -:ctw_3
-
-hotspot_not_fast_compiler = \
-  :hotspot_compiler \
-  -:tier1_compiler_1 \
-  -:tier1_compiler_2 \
-  -:tier1_compiler_3 \
 
 ctw_2 = \
   applications/ctw/modules/java_base.java \

@@ -35,10 +35,6 @@
 #include "opto/stringopts.hpp"
 #include "opto/subnode.hpp"
 #include "runtime/sharedRuntime.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahSupport.hpp"
-#endif
 
 #define __ kit.
 
@@ -1833,7 +1829,6 @@ void PhaseStringOpts::replace_string_concat(StringConcat* sc) {
           count = kit.load_String_length(arg, false);
           arg_coder = kit.load_String_coder(arg, false);
         }
-
         if (arg->is_Con()) {
           // Constant string. Get constant coder and length.
           jbyte const_coder = get_constant_coder(kit, arg);

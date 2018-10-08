@@ -57,10 +57,6 @@
 #include "runtime/objectMonitor.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "utilities/macros.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahSupport.hpp"
-#endif
 
 class LibraryIntrinsic : public InlineCallGenerator {
   // Extend the set of intrinsics known to the runtime:
@@ -5814,7 +5810,6 @@ bool LibraryCallKit::inline_aescrypt_Block(vmIntrinsics::ID id) {
   Node* dest            = argument(3);
   Node* dest_offset     = argument(4);
 
-  // Resolve src and dest arrays for ShenandoahGC.
   src = must_be_not_null(src, true);
   dest = must_be_not_null(dest, true);
 
@@ -5891,8 +5886,6 @@ bool LibraryCallKit::inline_cipherBlockChaining_AESCrypt(vmIntrinsics::ID id) {
   Node* dest                       = argument(4);
   Node* dest_offset                = argument(5);
 
-  // inline_cipherBlockChaining_AESCrypt_predicate() has its own
-  // barrier. This one should optimize away.
   src = must_be_not_null(src, false);
   dest = must_be_not_null(dest, false);
 
@@ -5943,7 +5936,6 @@ bool LibraryCallKit::inline_cipherBlockChaining_AESCrypt(vmIntrinsics::ID id) {
 
   // similarly, get the start address of the r vector
   Node* objRvec = load_field_from_object(cipherBlockChaining_object, "r", "[B", /*is_exact*/ false);
-
   if (objRvec == NULL) return false;
   objRvec = access_resolve(objRvec, ACCESS_WRITE);
   Node* r_start = array_element_address(objRvec, intcon(0), T_BYTE);
