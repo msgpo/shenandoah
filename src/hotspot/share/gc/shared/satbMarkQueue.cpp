@@ -34,10 +34,6 @@
 #include "runtime/thread.hpp"
 #include "runtime/threadSMR.hpp"
 #include "runtime/vmThread.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/shenandoahHeap.inline.hpp"
-#endif
 
 SATBMarkQueue::SATBMarkQueue(SATBMarkQueueSet* qset, bool permanent) :
   // SATB queues are only active during marking cycles. We create
@@ -79,25 +75,7 @@ bool SATBMarkQueue::should_enqueue_buffer() {
   assert(threshold <= capacity(),
          "enqueue threshold " SIZE_FORMAT " exceeds capacity " SIZE_FORMAT,
          threshold, capacity());
-  bool should_enqueue = index() < threshold;
-#if INCLUDE_SHENANDOAHGC
-  if (UseShenandoahGC) {
-    size_t cap = capacity();
-    Thread* t = Thread::current();
-    if (ShenandoahThreadLocalData::is_force_satb_flush(t)) {
-      if (!should_enqueue && cap != index()) {
-        // Non-empty buffer is compacted, and we decided not to enqueue it.
-        // Shenandoah still wants to know about leftover work in that buffer eventually.
-        // This avoid dealing with these leftovers during the final-mark, after the buffers
-        // are drained completely.
-        // TODO: This can be extended to handle G1 too
-        should_enqueue = true;
-      }
-      ShenandoahThreadLocalData::set_force_satb_flush(t, false);
-    }
-  }
-#endif
-  return should_enqueue;
+  return index() < threshold;
 }
 
 void SATBMarkQueue::apply_closure_and_empty(SATBBufferClosure* cl) {

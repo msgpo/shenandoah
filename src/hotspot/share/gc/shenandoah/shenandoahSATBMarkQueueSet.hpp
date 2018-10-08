@@ -29,6 +29,12 @@
 #include "runtime/mutex.hpp"
 #include "runtime/thread.hpp"
 
+class ShenandoahSATBMarkQueue: public SATBMarkQueue {
+public:
+  ShenandoahSATBMarkQueue(SATBMarkQueueSet* qset) : SATBMarkQueue(qset, /* permanent = */ false) {}
+  virtual bool should_enqueue_buffer();
+};
+
 class ShenandoahSATBMarkQueueSet : public SATBMarkQueueSet {
 private:
   ShenandoahHeap* _heap;
