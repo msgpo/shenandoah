@@ -3729,7 +3729,7 @@ AllocateNode* AllocateNode::Ideal_allocation(Node* ptr, PhaseTransform* phase) {
   }
 
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-  ptr = bs->peek_thru_gc_barrier(ptr);
+  ptr = bs->step_over_gc_barrier(ptr);
 
   if (ptr->is_CheckCastPP()) { // strip only one raw-to-oop cast
     ptr = ptr->in(1);

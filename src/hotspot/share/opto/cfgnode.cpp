@@ -1313,7 +1313,7 @@ static Node *is_x2logic( PhaseGVN *phase, PhiNode *phi, int true_path ) {
   // Build int->bool conversion
   Node *in1 = cmp->in(1);
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-  in1 = bs->peek_thru_gc_barrier(in1);
+  in1 = bs->step_over_gc_barrier(in1);
   Node *n = new Conv2BNode(in1);
   if( flipped )
     n = new XorINode( phase->transform(n), phase->intcon(1) );

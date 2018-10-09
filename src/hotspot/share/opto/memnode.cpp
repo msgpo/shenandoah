@@ -930,8 +930,8 @@ Node* LoadNode::can_see_arraycopy_value(Node* st, PhaseGVN* phase) const {
       assert(addp->is_AddP(), "address must be addp");
       assert(ac->in(ArrayCopyNode::Dest)->is_AddP(), "dest must be an address");
       BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-      assert(bs->peek_thru_gc_barrier(addp->in(AddPNode::Base)) == bs->peek_thru_gc_barrier(ac->in(ArrayCopyNode::Dest)->in(AddPNode::Base)), "strange pattern");
-      assert(bs->peek_thru_gc_barrier(addp->in(AddPNode::Address)) == bs->peek_thru_gc_barrier(ac->in(ArrayCopyNode::Dest)->in(AddPNode::Address)), "strange pattern");
+      assert(bs->step_over_gc_barrier(addp->in(AddPNode::Base)) == bs->step_over_gc_barrier(ac->in(ArrayCopyNode::Dest)->in(AddPNode::Base)), "strange pattern");
+      assert(bs->step_over_gc_barrier(addp->in(AddPNode::Address)) == bs->step_over_gc_barrier(ac->in(ArrayCopyNode::Dest)->in(AddPNode::Address)), "strange pattern");
       addp->set_req(AddPNode::Base, src->in(AddPNode::Base));
       addp->set_req(AddPNode::Address, src->in(AddPNode::Address));
     } else {
@@ -1088,7 +1088,7 @@ Node* MemNode::can_see_stored_value(Node* st, PhaseTransform* phase) const {
       intptr_t ignore = 0;
       Node* base = AddPNode::Ideal_base_and_offset(ld_adr, phase, ignore);
       BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-      base = bs->peek_thru_gc_barrier(base);
+      base = bs->step_over_gc_barrier(base);
       if (base != NULL && base->is_Proj() &&
           base->as_Proj()->_con == TypeFunc::Parms &&
           base->in(0)->is_CallStaticJava() &&
@@ -1162,7 +1162,7 @@ Node* LoadNode::Identity(PhaseGVN* phase) {
     // usually runs first, producing the singleton type of the Con.)
     if (UseShenandoahGC) {
       BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-      Node* value_no_barrier = bs->peek_thru_gc_barrier(value->Opcode() == Op_EncodeP ? value->in(1) : value);
+      Node* value_no_barrier = bs->step_over_gc_barrier(value->Opcode() == Op_EncodeP ? value->in(1) : value);
       if (value->Opcode() == Op_EncodeP) {
         if (value_no_barrier != value->in(1)) {
           Node* encode = value->clone();

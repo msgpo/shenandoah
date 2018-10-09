@@ -442,7 +442,7 @@ Node *PhaseMacroExpand::value_from_mem_phi(Node *mem, BasicType ft, const Type *
       } else if (val->is_Store()) {
         Node* n = val->in(MemNode::ValueIn);
         BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-        n = bs->peek_thru_gc_barrier(n);
+        n = bs->step_over_gc_barrier(n);
         values.at_put(j, n);
       } else if(val->is_Proj() && val->in(0) == alloc) {
         values.at_put(j, _igvn.zerocon(ft));
@@ -557,7 +557,7 @@ Node *PhaseMacroExpand::value_from_mem(Node *sfpt_mem, Node *sfpt_ctl, BasicType
     } else if (mem->is_Store()) {
       Node* n = mem->in(MemNode::ValueIn);
       BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-      n = bs->peek_thru_gc_barrier(n);
+      n = bs->step_over_gc_barrier(n);
       return n;
     } else if (mem->is_Phi()) {
       // attempt to produce a Phi reflecting the values on the input paths of the Phi

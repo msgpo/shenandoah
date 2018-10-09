@@ -1395,13 +1395,8 @@ static void kill_dead_code( Node *dead, PhaseIterGVN *igvn ) {
             // The restriction (outcnt() <= 2) is the same as in set_req_X()
             // and remove_globally_dead_node().
             igvn->add_users_to_worklist( n );
-#if INCLUDE_SHENANDOAHGC
-          // TODO: Move into below enqueue_useful_gc_barrier() call
-          } else if (n->Opcode() == Op_AddP && ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(n)) {
-            igvn->add_users_to_worklist(n);
-#endif
           } else {
-            BarrierSet::barrier_set()->barrier_set_c2()->enqueue_useful_gc_barrier(igvn->_worklist, n);
+            BarrierSet::barrier_set()->barrier_set_c2()->enqueue_useful_gc_barrier(igvn, n);
           }
         }
       }

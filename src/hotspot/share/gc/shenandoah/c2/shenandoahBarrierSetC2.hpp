@@ -113,18 +113,18 @@ public:
 
   // These are general helper methods used by C2
   virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const;
+  virtual Node* array_copy_load_store_barrier(PhaseGVN *phase, bool can_reshape, Node* v, MergeMemNode* mem, Node*& ctl) const;
 
   // Support for GC barriers emitted during parsing
   virtual bool is_gc_barrier_node(Node* node) const;
   virtual Node* step_over_gc_barrier(Node* c) const;
-  virtual Node* peek_thru_gc_barrier(Node* v) const;
 
   // Support for macro expanded GC barriers
   virtual void register_potential_barrier_node(Node* node) const;
   virtual void unregister_potential_barrier_node(Node* node) const;
   virtual void eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) const;
-  virtual void enqueue_useful_gc_barrier(Unique_Node_List &worklist, Node* node) const;
-  virtual void eliminate_useless_gc_barriers(Unique_Node_List &useful) const;
+  virtual void enqueue_useful_gc_barrier(PhaseIterGVN* igvn, Node* node) const;
+  virtual void eliminate_useless_gc_barriers(Unique_Node_List &useful, Compile* C) const;
   virtual void add_users_to_worklist(Unique_Node_List* worklist) const;
 
   // Allow barrier sets to have shared state that is preserved across a compilation unit.

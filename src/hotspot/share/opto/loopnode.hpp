@@ -38,6 +38,8 @@ class IdealLoopTree;
 class LoopNode;
 class Node;
 class OuterStripMinedLoopEndNode;
+class ShenandoahBarrierNode;
+class ShenandoahWriteBarrierNode;
 class PathFrequency;
 class PhaseIdealLoop;
 class CountedLoopReserveKit;
@@ -636,6 +638,8 @@ class PhaseIdealLoop : public PhaseTransform {
   friend class IdealLoopTree;
   friend class SuperWord;
   friend class CountedLoopReserveKit;
+  friend class ShenandoahBarrierNode;
+  friend class ShenandoahWriteBarrierNode;
 
   // Pre-computed def-use info
   PhaseIterGVN &_igvn;
@@ -1294,10 +1298,8 @@ private:
   Node *place_near_use( Node *useblock ) const;
   Node* try_move_store_before_loop(Node* n, Node *n_ctrl);
   void try_move_store_after_loop(Node* n);
-public:
   bool identical_backtoback_ifs(Node *n);
   bool can_split_if(Node *n_ctrl);
-private:
 
   bool _created_loop_node;
 public:
@@ -1324,8 +1326,6 @@ public:
   static int _loop_work;        // Sum of PhaseIdealLoop x _unique
 #endif
   void rpo( Node *start, Node_Stack &stk, VectorSet &visited, Node_List &rpo_list ) const;
-
-  PhaseIterGVN& igvn() { return _igvn; }
 };
 
 // This kit may be used for making of a reserved copy of a loop before this loop

@@ -3747,7 +3747,6 @@ bool LibraryCallKit::inline_array_copyOf(bool is_copyOfRange) {
         }
         Node* n = _gvn.transform(ac);
         if (n == ac) {
-          ac->_adr_type = TypePtr::BOTTOM;
           ac->connect_outputs(this);
         } else {
           assert(validated, "shouldn't transform if all arguments not validated");
@@ -4344,7 +4343,6 @@ bool LibraryCallKit::inline_native_clone(bool is_virtual) {
           ac->set_cloneoop();
           Node* n = _gvn.transform(ac);
           assert(n == ac, "cannot disappear");
-          ac->_adr_type = TypePtr::BOTTOM;
           ac->connect_outputs(this);
 
           result_reg->init_req(_objArray_path, control());
@@ -4829,7 +4827,6 @@ bool LibraryCallKit::inline_arraycopy() {
 
   Node* n = _gvn.transform(ac);
   if (n == ac) {
-    ac->_adr_type = TypePtr::BOTTOM;
     ac->connect_outputs(this);
   } else {
     assert(validated, "shouldn't transform if all arguments not validated");
@@ -4851,7 +4848,7 @@ LibraryCallKit::tightly_coupled_allocation(Node* ptr,
   if (C->AliasLevel() == 0)  return NULL;  // no MergeMems around
 
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-  ptr = bs->peek_thru_gc_barrier(ptr);
+  ptr = bs->step_over_gc_barrier(ptr);
 
   AllocateArrayNode* alloc = AllocateArrayNode::Ideal_array_allocation(ptr, &_gvn);
   if (alloc == NULL)  return NULL;

@@ -821,12 +821,7 @@ bool ShenandoahBarrierSetC2::is_gc_barrier_node(Node* node) const {
 }
 
 Node* ShenandoahBarrierSetC2::step_over_gc_barrier(Node* c) const {
-  // Currently not needed.
-  return c;
-}
-
-Node* ShenandoahBarrierSetC2::peek_thru_gc_barrier(Node* v) const {
-  return ShenandoahBarrierNode::skip_through_barrier(v);
+  return ShenandoahBarrierNode::skip_through_barrier(c);
 }
 
 bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const {
@@ -846,6 +841,51 @@ bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_couple
   }
   return true;
 }
+
+Node* ShenandoahBarrierSetC2::array_copy_load_store_barrier(PhaseGVN *phase, bool can_reshape, Node* v, MergeMemNode* mem, Node*& ctl) const {
+  if (ShenandoahStoreValReadBarrier) {
+    RegionNode* region = new RegionNode(3);
+    const Type* v_t = phase->type(v);
+    Node* phi = new PhiNode(region, v_t->isa_oopptr() ? v_t->is_oopptr()->cast_to_nonconst() : v_t);
+    Node* cmp = phase->transform(new CmpPNode(v, phase->zerocon(T_OBJECT)));
+    Node* bol = phase->transform(new BoolNode(cmp, BoolTest::ne));
+    IfNode* iff = new IfNode(ctl, bol, PROB_LIKELY_MAG(3), COUNT_UNKNOWN);
+
+    phase->transform(iff);
+    if (can_reshape) {
+      phase->is_IterGVN()->_worklist.push(iff);
+    } else {
+      phase->record_for_igvn(iff);
+    }
+
+    Node* null_true = phase->transform(new IfFalseNode(iff));
+    Node* null_false = phase->transform(new IfTrueNode(iff));
+    region->init_req(1, null_true);
+    region->init_req(2, null_false);
+    phi->init_req(1, phase->zerocon(T_OBJECT));
+    Node* cast = new CastPPNode(v, phase->type(v)->join_speculative(TypePtr::NOTNULL));
+    cast->set_req(0, null_false);
+    cast = phase->transform(cast);
+    Node* rb = phase->transform(new ShenandoahReadBarrierNode(null_false, phase->C->immutable_memory(), cast, false));
+    phi->init_req(2, rb);
+    ctl = phase->transform(region);
+    return phase->transform(phi);
+  }
+  if (ShenandoahStoreValEnqueueBarrier) {
+    const TypePtr* adr_type = ShenandoahBarrierNode::brooks_pointer_type(phase->type(v));
+    int alias = phase->C->get_alias_index(adr_type);
+    Node* wb = new ShenandoahWriteBarrierNode(phase->C, ctl, mem->memory_at(alias), v);
+    Node* wb_transformed = phase->transform(wb);
+    Node* enqueue = phase->transform(new ShenandoahEnqueueBarrierNode(wb_transformed));
+    if (wb_transformed == wb) {
+      Node* proj = phase->transform(new ShenandoahWBMemProjNode(wb));
+      mem->set_memory_at(alias, proj);
+    }
+    return enqueue;
+  }
+  return v;
+}
+
 
 // Support for macro expanded GC barriers
 void ShenandoahBarrierSetC2::register_potential_barrier_node(Node* node) const {
@@ -887,10 +927,21 @@ void ShenandoahBarrierSetC2::shenandoah_eliminate_wb_pre(Node* call, PhaseIterGV
   call->del_req(call->req()-1);
 }
 
-void ShenandoahBarrierSetC2::enqueue_useful_gc_barrier(Unique_Node_List &worklist, Node* node) const {
+void ShenandoahBarrierSetC2::enqueue_useful_gc_barrier(PhaseIterGVN* igvn, Node* node) const {
+  if (node->Opcode() == Op_AddP && ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(node)) {
+    igvn->add_users_to_worklist(node);
+  }
 }
 
-void ShenandoahBarrierSetC2::eliminate_useless_gc_barriers(Unique_Node_List &useful) const {
+void ShenandoahBarrierSetC2::eliminate_useless_gc_barriers(Unique_Node_List &useful, Compile* C) const {
+  for (uint i = 0; i < useful.size(); i++) {
+    Node* n = useful.at(i);
+    if (n->Opcode() == Op_AddP && ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(n)) {
+      for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
+        C->record_for_igvn(n->fast_out(i));
+      }
+    }
+  }
   for (int i = state()->shenandoah_barriers_count()-1; i >= 0; i--) {
     ShenandoahWriteBarrierNode* n = state()->shenandoah_barrier(i);
     if (!useful.member(n)) {

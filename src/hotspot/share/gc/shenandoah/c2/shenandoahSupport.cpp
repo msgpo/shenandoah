@@ -3047,15 +3047,13 @@ void ShenandoahBarrierNode::verify_raw_mem(RootNode* root) {
       if (trace) { tty->print("XXXXXX verifying"); n->dump(); }
       for (uint next2 = 0; next2 < controls.size(); next2++) {
         Node *m = controls.at(next2);
-        if (!m->is_Loop() || controls.member(m->in(LoopNode::EntryControl)) || 1) {
-          for (DUIterator_Fast imax, i = m->fast_outs(imax); i < imax; i++) {
-            Node* u = m->fast_out(i);
-            if (u->is_CFG() && !u->is_Root() &&
-                !(u->Opcode() == Op_CProj && u->in(0)->Opcode() == Op_NeverBranch && u->as_Proj()->_con == 1) &&
-                !(u->is_Region() && u->unique_ctrl_out()->Opcode() == Op_Halt)) {
-              if (trace) { tty->print("XXXXXX pushing control"); u->dump(); }
-              controls.push(u);
-            }
+        for (DUIterator_Fast imax, i = m->fast_outs(imax); i < imax; i++) {
+          Node* u = m->fast_out(i);
+          if (u->is_CFG() && !u->is_Root() &&
+              !(u->Opcode() == Op_CProj && u->in(0)->Opcode() == Op_NeverBranch && u->as_Proj()->_con == 1) &&
+              !(u->is_Region() && u->unique_ctrl_out()->Opcode() == Op_Halt)) {
+            if (trace) { tty->print("XXXXXX pushing control"); u->dump(); }
+            controls.push(u);
           }
         }
       }
@@ -3063,32 +3061,30 @@ void ShenandoahBarrierNode::verify_raw_mem(RootNode* root) {
       for (uint next2 = 0; next2 < memories.size(); next2++) {
         Node *m = memories.at(next2);
         assert(m->bottom_type() == Type::MEMORY, "");
-        if (!m->is_Phi() || !m->in(0)->is_Loop() || controls.member(m->in(0)->in(LoopNode::EntryControl)) || 1) {
-          for (DUIterator_Fast imax, i = m->fast_outs(imax); i < imax; i++) {
-            Node* u = m->fast_out(i);
-            if (u->bottom_type() == Type::MEMORY && (u->is_Mem() || u->is_ClearArray())) {
+        for (DUIterator_Fast imax, i = m->fast_outs(imax); i < imax; i++) {
+          Node* u = m->fast_out(i);
+          if (u->bottom_type() == Type::MEMORY && (u->is_Mem() || u->is_ClearArray())) {
+            if (trace) { tty->print("XXXXXX pushing memory"); u->dump(); }
+            memories.push(u);
+          } else if (u->is_LoadStore()) {
+            if (trace) { tty->print("XXXXXX pushing memory"); u->find_out_with(Op_SCMemProj)->dump(); }
+            memories.push(u->find_out_with(Op_SCMemProj));
+          } else if (u->is_MergeMem() && u->as_MergeMem()->memory_at(Compile::AliasIdxRaw) == m) {
+            if (trace) { tty->print("XXXXXX pushing memory"); u->dump(); }
+            memories.push(u);
+          } else if (u->is_Phi()) {
+            assert(u->bottom_type() == Type::MEMORY, "");
+            if (u->adr_type() == TypeRawPtr::BOTTOM || u->adr_type() == TypePtr::BOTTOM) {
+              assert(controls.member(u->in(0)), "");
               if (trace) { tty->print("XXXXXX pushing memory"); u->dump(); }
               memories.push(u);
-            } else if (u->is_LoadStore()) {
-              if (trace) { tty->print("XXXXXX pushing memory"); u->find_out_with(Op_SCMemProj)->dump(); }
-              memories.push(u->find_out_with(Op_SCMemProj));
-            } else if (u->is_MergeMem() && u->as_MergeMem()->memory_at(Compile::AliasIdxRaw) == m) {
-              if (trace) { tty->print("XXXXXX pushing memory"); u->dump(); }
-              memories.push(u);
-            } else if (u->is_Phi()) {
-              assert(u->bottom_type() == Type::MEMORY, "");
-              if (u->adr_type() == TypeRawPtr::BOTTOM || u->adr_type() == TypePtr::BOTTOM) {
-                assert(controls.member(u->in(0)), "");
-                if (trace) { tty->print("XXXXXX pushing memory"); u->dump(); }
-                memories.push(u);
-              }
-            } else if (u->is_SafePoint() || u->is_MemBar()) {
-              for (DUIterator_Fast jmax, j = u->fast_outs(jmax); j < jmax; j++) {
-                Node* uu = u->fast_out(j);
-                if (uu->bottom_type() == Type::MEMORY) {
-                  if (trace) { tty->print("XXXXXX pushing memory"); uu->dump(); }
-                  memories.push(uu);
-                }
+            }
+          } else if (u->is_SafePoint() || u->is_MemBar()) {
+            for (DUIterator_Fast jmax, j = u->fast_outs(jmax); j < jmax; j++) {
+              Node* uu = u->fast_out(j);
+              if (uu->bottom_type() == Type::MEMORY) {
+                if (trace) { tty->print("XXXXXX pushing memory"); uu->dump(); }
+                memories.push(uu);
               }
             }
           }
@@ -3772,9 +3768,7 @@ void MemoryGraphFixer::fix_mem(Node* ctrl, Node* new_ctrl, Node* mem, Node* mem_
                   Node* m = find_mem(region->in(k), NULL);
                   if (m != mem) {
                     DEBUG_ONLY(if (trace) { tty->print("ZZZ setting memory of phi %d", k); uu->dump(); });
-                    if (newmm == NULL || 1) {
-                      newmm = clone_merge_mem(u, mem, m, _phase->ctrl_or_self(m), i);
-                    }
+                    newmm = clone_merge_mem(u, mem, m, _phase->ctrl_or_self(m), i);
                     if (newmm != u) {
                       _phase->igvn().replace_input_of(uu, k, newmm);
                       nb++;
@@ -3790,9 +3784,7 @@ void MemoryGraphFixer::fix_mem(Node* ctrl, Node* new_ctrl, Node* mem, Node* mem_
               Node* m = find_mem(_phase->ctrl_or_self(uu), uu);
               if (m != mem) {
                 DEBUG_ONLY(if (trace) { tty->print("ZZZ setting memory of use"); uu->dump(); });
-                if (newmm == NULL || 1) {
-                  newmm = clone_merge_mem(u, mem, m, _phase->ctrl_or_self(m), i);
-                }
+                newmm = clone_merge_mem(u, mem, m, _phase->ctrl_or_self(m), i);
                 if (newmm != u) {
                   _phase->igvn().replace_input_of(uu, uu->find_edge(u), newmm);
                   --j, --jmax;
@@ -4102,6 +4094,9 @@ int PhaseCFG::replace_uses_with_shenandoah_barrier_helper(Node* n, Node* use, No
 }
 
 void PhaseCFG::replace_uses_with_shenandoah_barrier(Node* n, Block* block, Node_List& worklist, GrowableArray<int>& ready_cnt, uint max_idx, uint& phi_cnt) {
+  if (!ShenandoahDecreaseRegisterPressure) {
+    return;
+  }
   // Replace all uses of barrier's input that are dominated by the
   // barrier with the value returned by the barrier: no need to keep
   // both live.

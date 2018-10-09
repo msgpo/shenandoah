@@ -427,5 +427,9 @@
                                                                             \
   experimental(bool, ShenandoahAlwaysClearSoftRefs, false,                  \
           "Clear soft references unconditionally")                          \
+                                                                            \
+  diagnostic(bool, ShenandoahDecreaseRegisterPressure, false,               \
+          "Try to reuse after-barrier values to reduce register pressure")  \
+                                                                            \
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP

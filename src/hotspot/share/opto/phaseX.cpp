@@ -1381,13 +1381,8 @@ void PhaseIterGVN::remove_globally_dead_node( Node *dead ) {
             } else if (dead->Opcode() == Op_ShenandoahWBMemProj) {
               assert(i == 0 && in->Opcode() == Op_ShenandoahWriteBarrier, "broken graph");
               _worklist.push(in);
-#if INCLUDE_SHENANDOAHGC
-            // TODO: Move into below call to enqueue_useful_gc_barrier()
-            } else if (in->Opcode() == Op_AddP && ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(in)) {
-              add_users_to_worklist(in);
-#endif
             } else {
-              BarrierSet::barrier_set()->barrier_set_c2()->enqueue_useful_gc_barrier(_worklist, in);
+              BarrierSet::barrier_set()->barrier_set_c2()->enqueue_useful_gc_barrier(this, in);
             }
             if (ReduceFieldZeroing && dead->is_Load() && i == MemNode::Memory &&
                 in->is_Proj() && in->in(0) != NULL && in->in(0)->is_Initialize()) {
@@ -2127,11 +2122,8 @@ void Node::set_req_X( uint i, Node *n, PhaseIterGVN *igvn ) {
     default:
       break;
     }
-#if INCLUDE_SHENANDOAHGC
-    if (old->Opcode() == Op_AddP && ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(old)) {
-      igvn->add_users_to_worklist(old);
-    }
-#endif
+
+    BarrierSet::barrier_set()->barrier_set_c2()->enqueue_useful_gc_barrier(igvn, old);
   }
 
 }

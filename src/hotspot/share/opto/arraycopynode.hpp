@@ -110,10 +110,6 @@ private:
                         Node* ctl, Node *mem);
   static bool may_modify_helper(const TypeOopPtr *t_oop, Node* n, PhaseTransform *phase, CallNode*& call);
 
-#if INCLUDE_SHENANDOAHGC
-  static Node* shenandoah_add_storeval_barrier(PhaseGVN *phase, bool can_reshape, Node* v, MergeMemNode* mem, Node*& ctl);
-#endif
-
 public:
 
   enum {

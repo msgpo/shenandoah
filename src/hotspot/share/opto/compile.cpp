@@ -396,14 +396,6 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
     if (n->outcnt() == 1 && n->has_special_unique_user()) {
       record_for_igvn(n->unique_out());
     }
-#if INCLUDE_SHENANDOAHGC
-    // TODO: Move into below eliminate_useless_gc_barriers(..) below
-    if (n->Opcode() == Op_AddP && ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(n)) {
-      for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
-        record_for_igvn(n->fast_out(i));
-      }
-    }
-#endif
   }
   // Remove useless macro and predicate opaq nodes
   for (int i = C->macro_count()-1; i >= 0; i--) {
@@ -434,7 +426,7 @@ void Compile::remove_useless_nodes(Unique_Node_List &useful) {
     }
   }
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-  bs->eliminate_useless_gc_barriers(useful);
+  bs->eliminate_useless_gc_barriers(useful, this);
   // clean up the late inline lists
   remove_useless_late_inlines(&_string_late_inlines, useful);
   remove_useless_late_inlines(&_boxing_late_inlines, useful);

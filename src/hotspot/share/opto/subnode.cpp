@@ -884,14 +884,12 @@ const Type *CmpPNode::sub( const Type *t1, const Type *t2 ) const {
     return TypeInt::CC;
 }
 
-static inline Node* isa_java_mirror_load_helper(PhaseGVN* phase, Node* n) {
+static inline Node* isa_java_mirror_load(PhaseGVN* phase, Node* n) {
   // Return the klass node for (indirect load from OopHandle)
   //   LoadBarrier?(LoadP(LoadP(AddP(foo:Klass, #java_mirror))))
   //   or NULL if not matching.
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-  if (bs->is_gc_barrier_node(n)) {
-    n = bs->step_over_gc_barrier(n);
-  }
+  n = bs->step_over_gc_barrier(n);
 
   if (n->Opcode() != Op_LoadP) return NULL;
 
@@ -911,35 +909,6 @@ static inline Node* isa_java_mirror_load_helper(PhaseGVN* phase, Node* n) {
 
   // We've found the klass node of a Java mirror load.
   return k;
-}
-
-static inline Node* isa_java_mirror_load(PhaseGVN* phase, Node* n) {
-  if (!UseShenandoahGC) {
-    if (n->Opcode() == Op_LoadP) {
-      return isa_java_mirror_load_helper(phase, n);
-    }
-  } else {
-#if INCLUDE_SHENANDOAHGC
-    if (n->is_ShenandoahBarrier() &&
-               n->in(ShenandoahBarrierNode::ValueIn)->Opcode() == Op_LoadP) {
-      // When Shenandoah is enabled acmp is compiled as:
-      // if (a != b) {
-      //   a = read_barrier(a);
-      //   b = read_barrier(b);
-      //   if (a == b) {
-      //     ..
-      //   } else {
-      //     ..
-      //   }
-      // } else  {
-      //
-      // Recognize that pattern here for the second comparison
-      return isa_java_mirror_load_helper(phase, n->in(ShenandoahBarrierNode::ValueIn));
-    }
-#endif
-  }
-
-  return NULL;
 }
 
 static inline Node* isa_const_java_mirror(PhaseGVN* phase, Node* n) {
@@ -966,59 +935,6 @@ static inline Node* isa_const_java_mirror(PhaseGVN* phase, Node* n) {
   return phase->makecon(TypeKlassPtr::make(mirror_type->as_klass()));
 }
 
-#if INCLUDE_SHENANDOAHGC
-bool CmpPNode::shenandoah_optimize_java_mirror_cmp(PhaseGVN *phase, bool can_reshape) {
-  assert(UseShenandoahGC, "shenandoah only");
-  if (in(1)->is_ShenandoahBarrier()) {
-    // For this pattern:
-    // if (a != b) {
-    //   a = read_barrier(a);
-    //   b = read_barrier(b);
-    //   if (a == b) {
-    //     ..
-    //   } else {
-    //     ..
-    //  }
-    // } else  {
-    //
-    // Change the second test to a.klass == b.klass and replace the
-    // first compare by that new test if possible.
-    if (can_reshape) {
-      for (DUIterator_Fast imax, i = fast_outs(imax); i < imax; i++) {
-        Node* u = fast_out(i);
-        if (u->is_Bool()) {
-          for (DUIterator_Fast jmax, j = u->fast_outs(jmax); j < jmax; j++) {
-            Node* uu = u->fast_out(j);
-            if (uu->is_If() &&
-                uu->in(0) != NULL &&
-                uu->in(0)->is_Proj() &&
-                uu->in(0)->in(0)->is_MemBar() &&
-                uu->in(0)->in(0)->in(0) != NULL &&
-                uu->in(0)->in(0)->in(0)->Opcode() == Op_IfTrue) {
-              Node* iff = uu->in(0)->in(0)->in(0)->in(0);
-              if (iff->in(1) != NULL &&
-                  iff->in(1)->is_Bool() &&
-                  iff->in(1)->as_Bool()->_test._test == BoolTest::ne &&
-                  iff->in(1)->in(1) != NULL &&
-                  iff->in(1)->in(1)->Opcode() == Op_CmpP) {
-                Node* cmp = iff->in(1)->in(1);
-                if (in(1)->in(ShenandoahBarrierNode::ValueIn) == cmp->in(1) &&
-                    (!in(2)->is_ShenandoahBarrier() || in(2)->in(ShenandoahBarrierNode::ValueIn) == cmp->in(2))) {
-                  PhaseIterGVN* igvn = phase->is_IterGVN();
-                  igvn->replace_input_of(iff->in(1), 1, this);
-                  return true;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  return false;
-}
-#endif
-
 //------------------------------Ideal------------------------------------------
 // Normalize comparisons between Java mirror loads to compare the klass instead.
 //
@@ -1027,16 +943,16 @@ bool CmpPNode::shenandoah_optimize_java_mirror_cmp(PhaseGVN *phase, bool can_res
 // checking to see an unknown klass subtypes a known klass with no subtypes;
 // this only happens on an exact match.  We can shorten this test by 1 load.
 Node *CmpPNode::Ideal( PhaseGVN *phase, bool can_reshape ) {
+  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
 #if INCLUDE_SHENANDOAHGC
   if (UseShenandoahGC) {
     Node* in1 = in(1);
     Node* in2 = in(2);
-    BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
     if (in1->bottom_type() == TypePtr::NULL_PTR) {
-      in2 = bs->peek_thru_gc_barrier(in2);
+      in2 = bs->step_over_gc_barrier(in2);
     }
     if (in2->bottom_type() == TypePtr::NULL_PTR) {
-      in1 = bs->peek_thru_gc_barrier(in1);
+      in1 = bs->step_over_gc_barrier(in1);
     }
     PhaseIterGVN* igvn = phase->is_IterGVN();
     if (in1 != in(1)) {
@@ -1077,13 +993,11 @@ Node *CmpPNode::Ideal( PhaseGVN *phase, bool can_reshape ) {
     Node* conk2 = isa_const_java_mirror(phase, in(2));
 
     if (k1 && (k2 || conk2)) {
-      if (!UseShenandoahGC SHENANDOAHGC_ONLY(|| shenandoah_optimize_java_mirror_cmp(phase, can_reshape))) {
-        Node* lhs = k1;
-        Node* rhs = (k2 != NULL) ? k2 : conk2;
-        this->set_req(1, lhs);
-        this->set_req(2, rhs);
-        return this;
-      }
+      Node* lhs = k1;
+      Node* rhs = (k2 != NULL) ? k2 : conk2;
+      this->set_req(1, lhs);
+      this->set_req(2, rhs);
+      return this;
     }
   }
 
