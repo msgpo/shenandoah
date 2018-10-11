@@ -587,6 +587,10 @@ void CollectedHeap::deduplicate_string(oop str) {
   // Do nothing, unless overridden in subclass.
 }
 
+size_t CollectedHeap::obj_size(oop obj) const {
+  return obj->size();
+}
+
 uint CollectedHeap::oop_extra_words() {
   // Default implementation doesn't need extra space for oops.
   return 0;

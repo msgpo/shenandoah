@@ -549,6 +549,8 @@ public:
 
   bool is_in(const void* p) const;
 
+  size_t obj_size(oop obj) const;
+
   // All objects can potentially move
   bool is_scavengable(oop obj) { return true; };
 

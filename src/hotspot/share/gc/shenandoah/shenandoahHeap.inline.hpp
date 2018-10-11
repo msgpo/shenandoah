@@ -127,11 +127,11 @@ inline oop ShenandoahHeap::evac_update_with_forwarded(T* p) {
     oop heap_oop = CompressedOops::decode_not_null(o);
     if (in_collection_set(heap_oop)) {
       oop forwarded_oop = ShenandoahBarrierSet::resolve_forwarded_not_null(heap_oop);
-      if (oopDesc::unsafe_equals(forwarded_oop, heap_oop)) {
+      if (oopDesc::equals_raw(forwarded_oop, heap_oop)) {
         forwarded_oop = evacuate_object(heap_oop, Thread::current());
       }
       oop prev = atomic_compare_exchange_oop(forwarded_oop, p, heap_oop);
-      if (oopDesc::unsafe_equals(prev, heap_oop)) {
+      if (oopDesc::equals_raw(prev, heap_oop)) {
         return forwarded_oop;
       } else {
         return NULL;
@@ -160,7 +160,7 @@ inline oop ShenandoahHeap::maybe_update_with_forwarded_not_null(T* p, oop heap_o
 
   if (in_collection_set(heap_oop)) {
     oop forwarded_oop = ShenandoahBarrierSet::resolve_forwarded_not_null(heap_oop);
-    if (oopDesc::unsafe_equals(forwarded_oop, heap_oop)) {
+    if (oopDesc::equals_raw(forwarded_oop, heap_oop)) {
       // E.g. during evacuation.
       return forwarded_oop;
     }
@@ -172,7 +172,7 @@ inline oop ShenandoahHeap::maybe_update_with_forwarded_not_null(T* p, oop heap_o
     // reference be updated later.
     oop result = atomic_compare_exchange_oop(forwarded_oop, p, heap_oop);
 
-    if (oopDesc::unsafe_equals(result, heap_oop)) { // CAS successful.
+    if (oopDesc::equals_raw(result, heap_oop)) { // CAS successful.
       return forwarded_oop;
     } else {
       // Note: we used to assert the following here. This doesn't work because sometimes, during
@@ -181,7 +181,7 @@ inline oop ShenandoahHeap::maybe_update_with_forwarded_not_null(T* p, oop heap_o
       // updates all from-space refs to to-space refs, which leaves a short window where the new array
       // elements can be from-space.
       // assert(CompressedOops::is_null(result) ||
-      //        oopDesc::unsafe_equals(result, ShenandoahBarrierSet::resolve_oop_static_not_null(result)),
+      //        oopDesc::equals_raw(result, ShenandoahBarrierSet::resolve_oop_static_not_null(result)),
       //       "expect not forwarded");
       return NULL;
     }
@@ -309,7 +309,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
   // Try to install the new forwarding pointer.
   oop result = BrooksPointer::try_update_forwardee(p, copy_val);
 
-  if (oopDesc::unsafe_equals(result, p)) {
+  if (oopDesc::equals_raw(result, p)) {
     // Successfully evacuated. Our copy is now the public one!
     shenandoah_assert_correct(NULL, copy_val);
     return copy_val;

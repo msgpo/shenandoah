@@ -841,7 +841,7 @@ private:
       if (_heap->in_collection_set(obj)) {
         shenandoah_assert_marked(p, obj);
         oop resolved = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
-        if (oopDesc::unsafe_equals(resolved, obj)) {
+        if (oopDesc::equals_raw(resolved, obj)) {
           resolved = _heap->evacuate_object(obj, _thread);
         }
         RawAccess<IS_NOT_NULL>::oop_store(p, resolved);
@@ -868,7 +868,7 @@ public:
 
   void do_object(oop p) {
     shenandoah_assert_marked(NULL, p);
-    if (oopDesc::unsafe_equals(p, ShenandoahBarrierSet::resolve_forwarded_not_null(p))) {
+    if (oopDesc::equals_raw(p, ShenandoahBarrierSet::resolve_forwarded_not_null(p))) {
       _heap->evacuate_object(p, _thread);
     }
   }
@@ -2682,6 +2682,10 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
       ld[i] = 0;
     }
   }
+}
+
+size_t ShenandoahHeap::obj_size(oop obj) const {
+  return CollectedHeap::obj_size(obj) + BrooksPointer::word_size();
 }
 
 BoolObjectClosure* ShenandoahIsAliveSelector::is_alive_closure() {

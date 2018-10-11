@@ -56,8 +56,8 @@ inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_ato
     compare_value = expected;
     res = Raw::oop_atomic_cmpxchg(new_value, addr, compare_value);
     expected = res;
-  } while ((! oopDesc::unsafe_equals(compare_value, expected)) && oopDesc::unsafe_equals(resolve_forwarded(compare_value), resolve_forwarded(expected)));
-  if (oopDesc::unsafe_equals(expected, compare_value)) {
+  } while ((! oopDesc::equals_raw(compare_value, expected)) && oopDesc::equals_raw(resolve_forwarded(compare_value), resolve_forwarded(expected)));
+  if (oopDesc::equals_raw(expected, compare_value)) {
     if (ShenandoahSATBBarrier && !CompressedOops::is_null(compare_value)) {
       ShenandoahBarrierSet::barrier_set()->enqueue(compare_value);
     }
@@ -205,7 +205,7 @@ bool ShenandoahBarrierSet::arraycopy_element(T* cur_src, T* cur_dst, Klass* boun
     case WRITE_BARRIER:
       if (_heap->in_collection_set(obj)) {
         oop forw = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
-        if (oopDesc::unsafe_equals(forw, obj)) {
+        if (oopDesc::equals_raw(forw, obj)) {
           forw = _heap->evacuate_object(forw, thread);
         }
         obj = forw;

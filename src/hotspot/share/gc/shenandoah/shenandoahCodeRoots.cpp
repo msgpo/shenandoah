@@ -132,7 +132,7 @@ private:
     if (! CompressedOops::is_null(o)) {
       oop obj1 = CompressedOops::decode_not_null(o);
       oop obj2 = ShenandoahBarrierSet::barrier_set()->write_barrier(obj1);
-      if (! oopDesc::unsafe_equals(obj1, obj2)) {
+      if (! oopDesc::equals_raw(obj1, obj2)) {
         shenandoah_assert_not_in_cset(NULL, obj2);
         RawAccess<IS_NOT_NULL>::oop_store(p, obj2);
         if (_heap->is_concurrent_traversal_in_progress()) {

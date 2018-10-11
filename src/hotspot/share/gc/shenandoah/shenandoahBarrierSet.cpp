@@ -220,12 +220,12 @@ oop ShenandoahBarrierSet::read_barrier(oop src) {
 }
 
 bool ShenandoahBarrierSet::obj_equals(oop obj1, oop obj2) {
-  bool eq = oopDesc::unsafe_equals(obj1, obj2);
+  bool eq = oopDesc::equals_raw(obj1, obj2);
   if (! eq && ShenandoahAcmpBarrier) {
     OrderAccess::loadload();
     obj1 = resolve_forwarded(obj1);
     obj2 = resolve_forwarded(obj2);
-    eq = oopDesc::unsafe_equals(obj1, obj2);
+    eq = oopDesc::equals_raw(obj1, obj2);
   }
   return eq;
 }
@@ -236,7 +236,7 @@ oop ShenandoahBarrierSet::write_barrier_mutator(oop obj) {
   shenandoah_assert_in_cset(NULL, obj);
 
   oop fwd = resolve_forwarded_not_null(obj);
-  if (oopDesc::unsafe_equals(obj, fwd)) {
+  if (oopDesc::equals_raw(obj, fwd)) {
     ShenandoahEvacOOMScope oom_evac_scope;
 
     Thread* thread = Thread::current();
@@ -265,7 +265,7 @@ oop ShenandoahBarrierSet::write_barrier_mutator(oop obj) {
       size_t count = 0;
       while ((cur < r->top()) && ctx->is_marked(oop(cur)) && (count++ < max)) {
         oop cur_oop = oop(cur);
-        if (oopDesc::unsafe_equals(cur_oop, resolve_forwarded_not_null(cur_oop))) {
+        if (oopDesc::equals_raw(cur_oop, resolve_forwarded_not_null(cur_oop))) {
           _heap->evacuate_object(cur_oop, thread);
         }
         cur = cur + cur_oop->size() + BrooksPointer::word_size();
@@ -284,7 +284,7 @@ oop ShenandoahBarrierSet::write_barrier_impl(oop obj) {
     oop fwd = resolve_forwarded_not_null(obj);
     if (evac_in_progress &&
         _heap->in_collection_set(obj) &&
-        oopDesc::unsafe_equals(obj, fwd)) {
+        oopDesc::equals_raw(obj, fwd)) {
       Thread *t = Thread::current();
       if (t->is_GC_task_thread()) {
         return _heap->evacuate_object(obj, t);
