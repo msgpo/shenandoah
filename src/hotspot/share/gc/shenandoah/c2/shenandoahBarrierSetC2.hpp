@@ -114,6 +114,7 @@ public:
   // These are general helper methods used by C2
   virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const;
   virtual Node* array_copy_load_store_barrier(PhaseGVN *phase, bool can_reshape, Node* v, MergeMemNode* mem, Node*& ctl) const;
+  virtual void array_copy_post_barrier_at_expansion(ArrayCopyNode* ac, Node*& c, Node*& m, PhaseIterGVN& igvn) const;
 
   // Support for GC barriers emitted during parsing
   virtual bool is_gc_barrier_node(Node* node) const;

@@ -27,6 +27,7 @@
 #include "gc/shenandoah/shenandoahRuntime.hpp"
 #include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
 #include "gc/shenandoah/c2/shenandoahSupport.hpp"
+#include "opto/arraycopynode.hpp"
 #include "opto/graphKit.hpp"
 #include "opto/idealKit.hpp"
 #include "opto/macro.hpp"
@@ -884,6 +885,28 @@ Node* ShenandoahBarrierSetC2::array_copy_load_store_barrier(PhaseGVN *phase, boo
     return enqueue;
   }
   return v;
+}
+
+void ShenandoahBarrierSetC2::array_copy_post_barrier_at_expansion(ArrayCopyNode* ac, Node*& c, Node*& m, PhaseIterGVN& igvn) const {
+  assert(ac->is_clonebasic(), "no other kind of arraycopy here");
+  const TypePtr* raw_adr_type = TypeRawPtr::BOTTOM;
+  Node* dest = ac->in(ArrayCopyNode::Dest);
+  assert(dest->is_AddP(), "bad input");
+  Node* call = new CallLeafNoFPNode(ShenandoahBarrierSetC2::shenandoah_clone_barrier_Type(),
+                                    CAST_FROM_FN_PTR(address, ShenandoahRuntime::shenandoah_clone_barrier),
+                                    "shenandoah_clone_barrier", raw_adr_type);
+  call->init_req(TypeFunc::Control, c);
+  call->init_req(TypeFunc::I_O    , igvn.C->top());
+  call->init_req(TypeFunc::Memory , m);
+  call->init_req(TypeFunc::ReturnAdr, igvn.C->top());
+  call->init_req(TypeFunc::FramePtr, igvn.C->top());
+  call->init_req(TypeFunc::Parms+0, dest->in(AddPNode::Base));
+
+  call = igvn.transform(call);
+  c = new ProjNode(call,TypeFunc::Control);
+  c = igvn.transform(c);
+  m = new ProjNode(call, TypeFunc::Memory);
+  m = igvn.transform(m);
 }
 
 

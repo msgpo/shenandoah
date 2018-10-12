@@ -176,6 +176,7 @@ private:
                                     Node* src,  Node* src_offset,
                                     Node* dest, Node* dest_offset,
                                     Node* copy_length, bool dest_uninitialized);
+  bool clone_needs_postbarrier(ArrayCopyNode *ac);
 
   void expand_arraycopy_node(ArrayCopyNode *ac);
 
@@ -195,9 +196,6 @@ private:
 
   Node* make_arraycopy_load(ArrayCopyNode* ac, intptr_t offset, Node* ctl, Node* mem, BasicType ft, const Type *ftype, AllocateNode *alloc);
 
-#if INCLUDE_SHENANDOAHGC
-  Node* shenandoah_call_clone_barrier(Node* call, Node* dest);
-#endif
 public:
   PhaseMacroExpand(PhaseIterGVN &igvn) : Phase(Macro_Expand), _igvn(igvn), _has_locks(false) {
     _igvn.set_delay_transform(true);

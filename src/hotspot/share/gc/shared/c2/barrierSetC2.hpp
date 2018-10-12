@@ -206,6 +206,7 @@ public:
   };
   virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const { return false; }
   virtual Node* array_copy_load_store_barrier(PhaseGVN *phase, bool can_reshape, Node* v, MergeMemNode* mem, Node*& ctl) const { return v; }
+  virtual void array_copy_post_barrier_at_expansion(ArrayCopyNode* ac, Node*& c, Node*& m, PhaseIterGVN& igvn) const { }
 
   // Support for GC barriers emitted during parsing
   virtual bool has_load_barriers() const { return false; }
