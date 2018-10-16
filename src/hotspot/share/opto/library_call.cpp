@@ -4847,9 +4847,6 @@ LibraryCallKit::tightly_coupled_allocation(Node* ptr,
   if (stopped())             return NULL;  // no fast path
   if (C->AliasLevel() == 0)  return NULL;  // no MergeMems around
 
-  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-  ptr = bs->step_over_gc_barrier(ptr);
-
   AllocateArrayNode* alloc = AllocateArrayNode::Ideal_array_allocation(ptr, &_gvn);
   if (alloc == NULL)  return NULL;
 
