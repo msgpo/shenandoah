@@ -890,13 +890,14 @@ public:
   {}
 
   void work(uint worker_id) {
-    ShenandoahEvacOOMScope oom_evac_scope;
     if (_concurrent) {
       ShenandoahConcurrentWorkerSession worker_session(worker_id);
-      SuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
+      ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
+      ShenandoahEvacOOMScope oom_evac_scope;
       do_work();
     } else {
       ShenandoahParallelWorkerSession worker_session(worker_id);
+      ShenandoahEvacOOMScope oom_evac_scope;
       do_work();
     }
   }
@@ -2003,7 +2004,7 @@ public:
   void work(uint worker_id) {
     if (_concurrent) {
       ShenandoahConcurrentWorkerSession worker_session(worker_id);
-      SuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
+      ShenandoahSuspendibleThreadSetJoiner stsj(ShenandoahSuspendibleWorkers);
       do_work();
     } else {
       ShenandoahParallelWorkerSession worker_session(worker_id);
