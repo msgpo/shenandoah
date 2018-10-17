@@ -717,10 +717,9 @@ void ShenandoahConcurrentMark::weak_refs_work_doit(bool full_gc) {
       rp->process_discovered_references(is_alive.is_alive_closure(), &keep_alive,
                                         &complete_gc, &executor,
                                         &pt);
-#ifdef ASSERT
+
       ShenandoahWeakAssertNotForwardedClosure cl;
       WeakProcessor::weak_oops_do(is_alive.is_alive_closure(), &cl);
-#endif
     }
 
     pt.print_all_references();
