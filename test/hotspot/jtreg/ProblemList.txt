@@ -76,7 +76,6 @@ gc/survivorAlignment/TestPromotionFromSurvivorToTenuredAfterMinorGC.java 8177765
 gc/stress/TestJNIBlockFullGC/TestJNIBlockFullGC.java 8192647 generic-all
 gc/logging/TestUnifiedLoggingSwitchStress.java 8208778 macosx-x64
 gc/metaspace/CompressedClassSpaceSizeInJmapHeap.java 8193639 solaris-all
-gc/shenandoah/ShenandoahStrDedupStress.java 0000000 generic-all
 
 #############################################################################
 
