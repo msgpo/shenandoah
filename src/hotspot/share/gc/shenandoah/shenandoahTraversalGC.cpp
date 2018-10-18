@@ -274,7 +274,7 @@ public:
     // roots here.
     if (!_heap->is_degenerated_gc_in_progress()) {
       ShenandoahTraversalClosure roots_cl(q, rp);
-      CLDToOopClosure cld_cl(&roots_cl);
+      CLDToOopClosure cld_cl(&roots_cl, ClassLoaderData::_claim_strong);
       ShenandoahTraversalSATBThreadsClosure tc(&satb_cl);
       if (unload_classes) {
         ShenandoahRemarkCLDClosure weak_cld_cl(&roots_cl);
@@ -284,7 +284,7 @@ public:
       }
     } else {
       ShenandoahTraversalDegenClosure roots_cl(q, rp);
-      CLDToOopClosure cld_cl(&roots_cl);
+      CLDToOopClosure cld_cl(&roots_cl, ClassLoaderData::_claim_strong);
       ShenandoahTraversalSATBThreadsClosure tc(&satb_cl);
       if (unload_classes) {
         ShenandoahRemarkCLDClosure weak_cld_cl(&roots_cl);
@@ -700,7 +700,7 @@ public:
     ShenandoahParallelWorkerSession worker_session(worker_id);
     ShenandoahTraversalFixRootsClosure cl;
     MarkingCodeBlobClosure blobsCl(&cl, CodeBlobToOopClosure::FixRelocations);
-    CLDToOopClosure cldCl(&cl);
+    CLDToOopClosure cldCl(&cl, ClassLoaderData::_claim_strong);
     _rp->process_all_roots(&cl, &cl, &cldCl, &blobsCl, NULL, worker_id);
   }
 };

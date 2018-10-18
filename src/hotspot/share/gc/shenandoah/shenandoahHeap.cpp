@@ -821,6 +821,10 @@ void ShenandoahHeap::fill_with_dummy_object(HeapWord* start, HeapWord* end, bool
   CollectedHeap::fill_with_object(obj, end);
 }
 
+size_t ShenandoahHeap::min_dummy_object_size() const {
+  return CollectedHeap::min_dummy_object_size() + BrooksPointer::word_size();
+}
+
 class ShenandoahEvacuateUpdateRootsClosure: public BasicOopIterateClosure {
 private:
   ShenandoahHeap* _heap;
@@ -1069,7 +1073,7 @@ void ShenandoahHeap::roots_iterate(OopClosure* cl) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Only iterate roots while world is stopped");
 
   CodeBlobToOopClosure blobsCl(cl, false);
-  CLDToOopClosure cldCl(cl);
+  CLDToOopClosure cldCl(cl, ClassLoaderData::_claim_strong);
 
   ShenandoahRootProcessor rp(this, 1, ShenandoahPhaseTimings::_num_phases);
   rp.process_all_roots(cl, NULL, &cldCl, &blobsCl, NULL, 0);
@@ -1278,7 +1282,7 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   // First, we process all GC roots. This populates the work stack with initial objects.
   ShenandoahRootProcessor rp(this, 1, ShenandoahPhaseTimings::_num_phases);
   ObjectIterateScanRootClosure oops(&_aux_bit_map, &oop_stack);
-  CLDToOopClosure clds(&oops, false);
+  CLDToOopClosure clds(&oops, ClassLoaderData::_claim_none);
   CodeBlobToOopClosure blobs(&oops, false);
   rp.process_all_roots(&oops, &oops, &clds, &blobs, NULL, 0);
 

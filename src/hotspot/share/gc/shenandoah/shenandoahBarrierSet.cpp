@@ -73,6 +73,7 @@ ShenandoahBarrierSet::ShenandoahBarrierSet(ShenandoahHeap* heap) :
   BarrierSet(make_barrier_set_assembler<ShenandoahBarrierSetAssembler>(),
              make_barrier_set_c1<ShenandoahBarrierSetC1>(),
              make_barrier_set_c2<ShenandoahBarrierSetC2>(),
+             NULL /* barrier_set_nmethod */,
              BarrierSet::FakeRtti(BarrierSet::Shenandoah)),
   _heap(heap),
   _satb_mark_queue_set()

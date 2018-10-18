@@ -565,7 +565,7 @@ public:
 
   void work(uint worker_id) {
     ShenandoahAdjustPointersClosure cl;
-    CLDToOopClosure adjust_cld_closure(&cl, true);
+    CLDToOopClosure adjust_cld_closure(&cl, ClassLoaderData::_claim_strong);
     MarkingCodeBlobClosure adjust_code_closure(&cl,
                                              CodeBlobToOopClosure::FixRelocations);
 

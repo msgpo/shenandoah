@@ -124,7 +124,7 @@ private:
     //      and instead do that in concurrent phase under the relevant lock. This saves init mark
     //      pause time.
 
-    CLDToOopClosure clds_cl(oops);
+    CLDToOopClosure clds_cl(oops, ClassLoaderData::_claim_strong);
     MarkingCodeBlobClosure blobs_cl(oops, ! CodeBlobToOopClosure::FixRelocations);
     OopClosure* weak_oops = _process_refs ? NULL : oops;
 
@@ -168,7 +168,7 @@ public:
 
     ShenandoahHeap* heap = ShenandoahHeap::heap();
     ShenandoahUpdateRefsClosure cl;
-    CLDToOopClosure cldCl(&cl);
+    CLDToOopClosure cldCl(&cl, ClassLoaderData::_claim_strong);
 
     CodeBlobClosure* code_blobs;
     CodeBlobToOopClosure update_blobs(&cl, CodeBlobToOopClosure::FixRelocations);

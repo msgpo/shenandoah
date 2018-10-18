@@ -622,6 +622,7 @@ public:
 
   HeapWord* tlab_post_allocation_setup(HeapWord* obj);
   void fill_with_dummy_object(HeapWord* start, HeapWord* end, bool zap);
+  size_t min_dummy_object_size() const;
 
   void resize_tlabs();
 

@@ -66,7 +66,7 @@ ShenandoahRootProcessor::~ShenandoahRootProcessor() {
 }
 
 void ShenandoahRootProcessor::process_all_roots_slow(OopClosure* oops) {
-  CLDToOopClosure clds(oops);
+  CLDToOopClosure clds(oops, ClassLoaderData::_claim_strong);
   CodeBlobToOopClosure blobs(oops, !CodeBlobToOopClosure::FixRelocations);
 
   CodeCache::blobs_do(&blobs);
