@@ -254,7 +254,6 @@ bool PhaseIdealLoop::split_up( Node *n, Node *blk1, Node *blk2 ) {
   register_new_node(phi, blk1);
 
   // Remove cloned-up value from optimizer; use phi instead
-  split_mem_thru_phi(n, blk1, phi);
   _igvn.replace_node( n, phi );
 
   // (There used to be a self-recursive call to split_up() here,

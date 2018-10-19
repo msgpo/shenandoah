@@ -350,14 +350,14 @@ Node* ShenandoahWriteBarrierNode::Identity(PhaseGVN* phase) {
 
   if (igvn != NULL) {
     mem_proj = find_out_with(Op_ShenandoahWBMemProj);
-    if (mem_proj == NULL || mem_in == mem_proj) {
+    if (mem_in == mem_proj) {
       return this;
     }
   }
 
   Node* replacement = Identity_impl(phase);
   if (igvn != NULL) {
-    if (replacement != NULL && replacement != this) {
+    if (replacement != NULL && replacement != this && mem_proj != NULL) {
       igvn->replace_node(mem_proj, mem_in);
     }
   }

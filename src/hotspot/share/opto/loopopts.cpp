@@ -51,7 +51,7 @@
 //=============================================================================
 //------------------------------split_thru_phi---------------------------------
 // Split Node 'n' through merge point if there is enough win.
-Node *PhaseIdealLoop::split_thru_phi( Node *n, Node *region, int policy ) {
+Node *PhaseIdealLoop::split_thru_phi(Node *n, Node *region, int policy, Node** out_mem_phi) {
   if (n->Opcode() == Op_ConvI2L && n->bottom_type() != TypeLong::LONG) {
     // ConvI2L may have type information on it which is unsafe to push up
     // so disable this for now
@@ -80,6 +80,10 @@ Node *PhaseIdealLoop::split_thru_phi( Node *n, Node *region, int policy ) {
     phi = new PhiNode(region, type, NULL, iid, index, offset);
   } else {
     phi = PhiNode::make_blank(region, n);
+  }
+  Node* mem_phi = NULL;
+  if (n->Opcode() == Op_ShenandoahWriteBarrier) {
+    mem_phi = new PhiNode(region, Type::MEMORY, C->alias_type(n->adr_type())->adr_type());
   }
   uint old_unique = C->unique();
   for (uint i = 1; i < region->req(); i++) {
@@ -132,39 +136,52 @@ Node *PhaseIdealLoop::split_thru_phi( Node *n, Node *region, int policy ) {
       // otherwise it will be not updated during igvn->transform since
       // igvn->type(x) is set to x->Value() already.
       x->raise_bottom_type(t);
-      if (x->Opcode() != Op_ShenandoahWriteBarrier) {
-        Node *y = x->Identity(&_igvn);
-        if (y != x) {
+      Node *y = x->Identity(&_igvn);
+      if (y != x) {
+        wins++;
+        x = y;
+      } else {
+        y = _igvn.hash_find(x);
+        if (y) {
           wins++;
           x = y;
         } else {
-          y = _igvn.hash_find(x);
-          if (y) {
-            wins++;
-            x = y;
-          } else {
-            // Else x is a new node we are keeping
-            // We do not need register_new_node_with_optimizer
-            // because set_type has already been called.
-            _igvn._worklist.push(x);
-          }
+          // Else x is a new node we are keeping
+          // We do not need register_new_node_with_optimizer
+          // because set_type has already been called.
+          _igvn._worklist.push(x);
         }
-      } else {
-        _igvn._worklist.push(x);
       }
     }
     if (x != the_clone && the_clone != NULL)
       _igvn.remove_dead_node(the_clone);
     phi->set_req( i, x );
+    if (mem_phi != NULL) {
+      if (x == the_clone) {
+        mem_phi->init_req(i, _igvn.transform(new ShenandoahWBMemProjNode(x)));
+      } else {
+        Node* mem = n->in(ShenandoahBarrierNode::Memory);
+        if (mem->is_Phi() && mem->in(0) == region) {
+          mem = mem->in(i);
+        }
+        mem_phi->init_req(i, mem);
+      }
+    }
   }
   // Too few wins?
   if (wins <= policy) {
     _igvn.remove_dead_node(phi);
+    if (mem_phi != NULL) {
+      _igvn.remove_dead_node(mem_phi);
+    }
     return NULL;
   }
 
   // Record Phi
   register_new_node( phi, region );
+  if (mem_phi != NULL) {
+    register_new_node(mem_phi, region);
+  }
 
   for (uint i2 = 1; i2 < phi->req(); i2++) {
     Node *x = phi->in(i2);
@@ -216,47 +233,24 @@ Node *PhaseIdealLoop::split_thru_phi( Node *n, Node *region, int policy ) {
     }
   }
 
-  return phi;
-}
-
-/**
- * When splitting a Shenandoah write barrier through a phi, we
- * can not replace the write-barrier input of the ShenandoahWBMemProj
- * with the phi. We must also split the ShenandoahWBMemProj through the
- * phi and generate a new memory phi for it.
- */
-void PhaseIdealLoop::split_mem_thru_phi(Node* n, Node* r, Node* phi) {
-#if INCLUDE_SHENANDOAHGC
-  if (n->Opcode() == Op_ShenandoahWriteBarrier) {
-    if (n->has_out_with(Op_ShenandoahWBMemProj)) {
-      Node* old_mem_phi = n->in(ShenandoahBarrierNode::Memory);
-      assert(r->is_Region(), "need region to control phi");
-      assert(phi->is_Phi(), "expect phi");
-      Node* memphi = PhiNode::make(r, old_mem_phi, Type::MEMORY, C->alias_type(n->adr_type())->adr_type());
-      for (uint i = 1; i < r->req(); i++) {
-        Node* wb = phi->in(i);
-        if (wb->Opcode() == Op_ShenandoahWriteBarrier) {
-          // assert(! wb->has_out_with(Op_ShenandoahWBMemProj), "new clone does not have mem proj");
-          Node* new_proj = new ShenandoahWBMemProjNode(wb);
-          register_new_node(new_proj, r->in(i));
-          memphi->set_req(i, new_proj);
-        } else {
-          if (old_mem_phi->is_Phi() && old_mem_phi->in(0) == r) {
-            memphi->set_req(i, old_mem_phi->in(i));
-          }
+  if (mem_phi != NULL) {
+    for (uint i2 = 1; i2 < mem_phi->req(); i2++) {
+      Node *x = mem_phi->in(i2);
+      if (x->_idx >= old_unique) {
+        assert(x->Opcode() == Op_ShenandoahWBMemProj, "only for shenandoah memory");
+        set_ctrl(x, get_ctrl(x->in(0)));
+        IdealLoopTree* loop = get_loop(get_ctrl(x));
+        if (loop->_child == NULL) {
+          loop->_body.push(x);
         }
-      }
-      register_new_node(memphi, r);
-      Node* old_mem_out = n->find_out_with(Op_ShenandoahWBMemProj);
-      while (old_mem_out != NULL) {
-        assert(old_mem_out != NULL, "expect memory projection");
-        _igvn.replace_node(old_mem_out, memphi);
-        old_mem_out = n->find_out_with(Op_ShenandoahWBMemProj);
+
       }
     }
-    assert(! n->has_out_with(Op_ShenandoahWBMemProj), "no more memory outs");
   }
-#endif
+  if (mem_phi != NULL) {
+    *out_mem_phi = mem_phi;
+  }
+  return phi;
 }
 
 //------------------------------dominated_by------------------------------------
@@ -998,7 +992,7 @@ Node *PhaseIdealLoop::split_if_with_blocks_pre( Node *n ) {
 
   // Check for having no control input; not pinned.  Allow
   // dominating control.
-  if (n->in(0)) {
+  if (n->in(0) && !(n->Opcode() == Op_ShenandoahWriteBarrier && n->in(0) == n_blk)) {
     Node *dom = idom(n_blk);
     if (dom_lca(n->in(0), dom) != n->in(0)) {
       return n;
@@ -1023,13 +1017,17 @@ Node *PhaseIdealLoop::split_if_with_blocks_pre( Node *n ) {
   if( C->live_nodes() > 35000 ) return n; // Method too big
 
   // Split 'n' through the merge point if it is profitable
-  Node *phi = split_thru_phi( n, n_blk, policy );
+  Node* mem_phi = NULL;
+  Node *phi = split_thru_phi(n, n_blk, policy, &mem_phi);
   if (!phi) return n;
 
   // Found a Phi to split thru!
   // Replace 'n' with the new phi
-  split_mem_thru_phi(n, n_blk, phi);
-  _igvn.replace_node( n, phi );
+  if (n->Opcode() == Op_ShenandoahWriteBarrier) {
+    Node* proj = n->find_out_with(Op_ShenandoahWBMemProj);
+    _igvn.replace_node(proj, mem_phi);
+  }
+  _igvn.replace_node(n, phi);
   // Moved a load around the loop, 'en-registering' something.
   if (n_blk->is_Loop() && n->is_Load() &&
       !phi->in(LoopNode::LoopBackControl)->is_Load())

@@ -1379,8 +1379,9 @@ void PhaseIterGVN::remove_globally_dead_node( Node *dead ) {
                 assert(!(i < imax), "sanity");
               }
             } else if (dead->Opcode() == Op_ShenandoahWBMemProj) {
-              assert(i == 0 && in->Opcode() == Op_ShenandoahWriteBarrier, "broken graph");
-              _worklist.push(in);
+              if (in->Opcode() == Op_ShenandoahWriteBarrier) {
+                _worklist.push(in);
+              }
             } else {
               BarrierSet::barrier_set()->barrier_set_c2()->enqueue_useful_gc_barrier(this, in);
             }

@@ -223,7 +223,7 @@ public:
   virtual const TypePtr *adr_type() const {
     Node* wb = in(0);
     if (wb == NULL || wb->is_top())  return NULL; // node is dead
-    assert(wb->Opcode() == Op_ShenandoahWriteBarrier || (wb->is_Mach() && wb->as_Mach()->ideal_Opcode() == Op_ShenandoahWriteBarrier), "expect wb");
+    assert(wb->Opcode() == Op_ShenandoahWriteBarrier || (wb->is_Mach() && wb->as_Mach()->ideal_Opcode() == Op_ShenandoahWriteBarrier) || wb->is_Phi(), "expect wb");
     return ShenandoahBarrierNode::brooks_pointer_type(wb->bottom_type());
   }
 
