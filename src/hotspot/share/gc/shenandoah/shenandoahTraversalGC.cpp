@@ -381,6 +381,10 @@ void ShenandoahTraversalGC::init_traversal_collection() {
     _heap->verifier()->verify_before_traversal();
   }
 
+  if (VerifyBeforeGC) {
+    Universe::verify();
+  }
+
   {
     ShenandoahGCPhase phase_prepare(ShenandoahPhaseTimings::traversal_gc_prepare);
     ShenandoahHeapLocker lock(_heap->lock());
@@ -664,6 +668,10 @@ void ShenandoahTraversalGC::final_traversal_collection() {
 
     if (ShenandoahVerify) {
       _heap->verifier()->verify_after_traversal();
+    }
+
+    if (VerifyAfterGC) {
+      Universe::verify();
     }
   }
 }
