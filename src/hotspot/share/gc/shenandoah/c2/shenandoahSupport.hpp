@@ -208,10 +208,12 @@ public:
   Node* would_subsume(ShenandoahBarrierNode* other, PhaseIdealLoop* phase);
 };
 
-class ShenandoahWBMemProjNode : public ProjNode {
+class ShenandoahWBMemProjNode : public Node {
 public:
-  enum {SWBMEMPROJCON = (uint)-3};
-  ShenandoahWBMemProjNode(Node *src) : ProjNode( src, SWBMEMPROJCON) {
+  enum { Control,
+         WriteBarrier };
+
+  ShenandoahWBMemProjNode(Node *src) : Node(NULL, src) {
     assert(UseShenandoahGC && ShenandoahWriteBarrier, "should be enabled");
     assert(src->Opcode() == Op_ShenandoahWriteBarrier || src->is_Mach(), "epxect wb");
   }
@@ -221,7 +223,7 @@ public:
   virtual bool      is_CFG() const  { return false; }
   virtual const Type *bottom_type() const {return Type::MEMORY;}
   virtual const TypePtr *adr_type() const {
-    Node* wb = in(0);
+    Node* wb = in(WriteBarrier);
     if (wb == NULL || wb->is_top())  return NULL; // node is dead
     assert(wb->Opcode() == Op_ShenandoahWriteBarrier || (wb->is_Mach() && wb->as_Mach()->ideal_Opcode() == Op_ShenandoahWriteBarrier) || wb->is_Phi(), "expect wb");
     return ShenandoahBarrierNode::brooks_pointer_type(wb->bottom_type());

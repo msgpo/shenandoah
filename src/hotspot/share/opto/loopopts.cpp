@@ -238,7 +238,7 @@ Node *PhaseIdealLoop::split_thru_phi(Node *n, Node *region, int policy, Node** o
       Node *x = mem_phi->in(i2);
       if (x->_idx >= old_unique) {
         assert(x->Opcode() == Op_ShenandoahWBMemProj, "only for shenandoah memory");
-        set_ctrl(x, get_ctrl(x->in(0)));
+        set_ctrl(x, get_ctrl(x->in(ShenandoahWBMemProjNode::WriteBarrier)));
         IdealLoopTree* loop = get_loop(get_ctrl(x));
         if (loop->_child == NULL) {
           loop->_body.push(x);
@@ -1799,13 +1799,12 @@ void PhaseIdealLoop::clone_loop_handle_data_uses(Node* old, Node_List &old_new,
       // private Phi and those Phis need to be merged here.
       Node *phi;
       if( prev->is_Region() ) {
-        if (idx == 0 && use->Opcode() != Op_ShenandoahWBMemProj) {      // Updating control edge?
+        if (idx == 0) {      // Updating control edge?
           phi = prev;         // Just use existing control
         } else {              // Else need a new Phi
           phi = PhiNode::make( prev, old );
           // Now recursively fix up the new uses of old!
-          uint first = use->Opcode() != Op_ShenandoahWBMemProj ? 1 : 0;
-          for (uint i = first; i < prev->req(); i++) {
+          for (uint i = 1; i < prev->req(); i++) {
             worklist.push(phi); // Onto worklist once for each 'old' input
           }
         }
@@ -1822,7 +1821,7 @@ void PhaseIdealLoop::clone_loop_handle_data_uses(Node* old, Node_List &old_new,
         }
       }
       // If inserting a new Phi, check for prior hits
-      if (idx != 0 && use->Opcode() != Op_ShenandoahWBMemProj) {
+      if (idx != 0) {
         Node *hit = _igvn.hash_find_insert(phi);
         if( hit == NULL ) {
           _igvn.register_new_node_with_optimizer(phi); // Register new phi
@@ -3230,7 +3229,7 @@ bool PhaseIdealLoop::partial_peel( IdealLoopTree *loop, Node_List &old_new ) {
 
           // if not pinned and not a load (which maybe anti-dependent on a store)
           // and not a CMove (Matcher expects only bool->cmove).
-          if ( n->in(0) == NULL && !n->is_Load() && !n->is_CMove() ) {
+          if (n->in(0) == NULL && !n->is_Load() && !n->is_CMove() && n->Opcode() != Op_ShenandoahWBMemProj) {
             cloned_for_outside_use += clone_for_use_outside_loop( loop, n, worklist );
             sink_list.push(n);
             peel     >>= n->_idx; // delete n from peel set.
