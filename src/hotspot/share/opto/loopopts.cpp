@@ -82,9 +82,11 @@ Node *PhaseIdealLoop::split_thru_phi(Node *n, Node *region, int policy, Node** o
     phi = PhiNode::make_blank(region, n);
   }
   Node* mem_phi = NULL;
+#if INCLUDE_SHENANDOAHGC
   if (n->Opcode() == Op_ShenandoahWriteBarrier) {
     mem_phi = new PhiNode(region, Type::MEMORY, C->alias_type(n->adr_type())->adr_type());
   }
+#endif
   uint old_unique = C->unique();
   for (uint i = 1; i < region->req(); i++) {
     Node *x;
@@ -156,6 +158,7 @@ Node *PhaseIdealLoop::split_thru_phi(Node *n, Node *region, int policy, Node** o
     if (x != the_clone && the_clone != NULL)
       _igvn.remove_dead_node(the_clone);
     phi->set_req( i, x );
+#if INCLUDE_SHENANDOAHGC
     if (mem_phi != NULL) {
       if (x == the_clone) {
         mem_phi->init_req(i, _igvn.transform(new ShenandoahWBMemProjNode(x)));
@@ -167,21 +170,26 @@ Node *PhaseIdealLoop::split_thru_phi(Node *n, Node *region, int policy, Node** o
         mem_phi->init_req(i, mem);
       }
     }
+#endif
   }
   // Too few wins?
   if (wins <= policy) {
     _igvn.remove_dead_node(phi);
+#if INCLUDE_SHENANDOAHGC
     if (mem_phi != NULL) {
       _igvn.remove_dead_node(mem_phi);
     }
+#endif
     return NULL;
   }
 
   // Record Phi
   register_new_node( phi, region );
+#if INCLUDE_SHENANDOAHGC
   if (mem_phi != NULL) {
     register_new_node(mem_phi, region);
   }
+#endif
 
   for (uint i2 = 1; i2 < phi->req(); i2++) {
     Node *x = phi->in(i2);
@@ -233,6 +241,7 @@ Node *PhaseIdealLoop::split_thru_phi(Node *n, Node *region, int policy, Node** o
     }
   }
 
+#if INCLUDE_SHENANDOAHGC
   if (mem_phi != NULL) {
     for (uint i2 = 1; i2 < mem_phi->req(); i2++) {
       Node *x = mem_phi->in(i2);
@@ -250,6 +259,7 @@ Node *PhaseIdealLoop::split_thru_phi(Node *n, Node *region, int policy, Node** o
   if (mem_phi != NULL) {
     *out_mem_phi = mem_phi;
   }
+#endif
   return phi;
 }
 
