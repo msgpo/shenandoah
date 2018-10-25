@@ -128,6 +128,10 @@ bool ShenandoahBarrierNode::needs_barrier_impl(PhaseGVN* phase, ShenandoahBarrie
   if (n->is_Proj()) {
     return needs_barrier_impl(phase, orig, n->in(0), rb_mem, allow_fromspace, visited);
   }
+
+  if (n->Opcode() == Op_ShenandoahWBMemProj) {
+    return needs_barrier_impl(phase, orig, n->in(ShenandoahWBMemProjNode::WriteBarrier), rb_mem, allow_fromspace, visited);
+  }
   if (n->is_Phi()) {
     bool need_barrier = false;
     for (uint i = 1; i < n->req() && ! need_barrier; i++) {
@@ -3688,10 +3692,12 @@ void MemoryGraphFixer::fix_mem(Node* ctrl, Node* new_ctrl, Node* mem, Node* mem_
                 } else {
                   DEBUG_ONLY(if (trace) { tty->print("ZZZ NOT setting mem"); m->dump(); });
                   for (;;) {
-                    assert(m->is_Mem() || m->is_LoadStore() || m->is_Proj() || m->Opcode() == Op_ShenandoahWriteBarrier, "");
+                    assert(m->is_Mem() || m->is_LoadStore() || m->is_Proj() || m->Opcode() == Op_ShenandoahWriteBarrier || m->Opcode() == Op_ShenandoahWBMemProj, "");
                     Node* next = NULL;
                     if (m->is_Proj()) {
                       next = m->in(0);
+                    } else if (m->Opcode() == Op_ShenandoahWBMemProj) {
+                      next = m->in(ShenandoahWBMemProjNode::WriteBarrier);
                     } else if (m->is_Mem() || m->is_LoadStore()) {
                       assert(_alias == Compile::AliasIdxRaw, "");
                       next = m->in(MemNode::Memory);
