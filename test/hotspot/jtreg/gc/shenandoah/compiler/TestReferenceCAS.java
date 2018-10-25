@@ -94,54 +94,54 @@ public class TestReferenceCAS {
         String foo = new String("foo");
         String bar = new String("bar");
         String baz = new String("baz");
-        UNSAFE.putObject(base, offset, "foo");
+        UNSAFE.putReference(base, offset, "foo");
         {
             String newval = bar;
-            boolean r = UNSAFE.compareAndSetObject(base, offset, "foo", newval);
+            boolean r = UNSAFE.compareAndSetReference(base, offset, "foo", newval);
             assertEquals(r, true, "success compareAndSet Object");
             assertEquals(newval, "bar", "must not destroy newval");
-            Object x = UNSAFE.getObject(base, offset);
+            Object x = UNSAFE.getReference(base, offset);
             assertEquals(x, "bar", "success compareAndSet Object value");
         }
 
         {
             String newval = baz;
-            boolean r = UNSAFE.compareAndSetObject(base, offset, "foo", newval);
+            boolean r = UNSAFE.compareAndSetReference(base, offset, "foo", newval);
             assertEquals(r, false, "failing compareAndSet Object");
             assertEquals(newval, "baz", "must not destroy newval");
-            Object x = UNSAFE.getObject(base, offset);
+            Object x = UNSAFE.getReference(base, offset);
             assertEquals(x, "bar", "failing compareAndSet Object value");
         }
 
-        UNSAFE.putObject(base, offset, "bar");
+        UNSAFE.putReference(base, offset, "bar");
         {
             String newval = foo;
-            Object r = UNSAFE.compareAndExchangeObject(base, offset, "bar", newval);
+            Object r = UNSAFE.compareAndExchangeReference(base, offset, "bar", newval);
             assertEquals(r, "bar", "success compareAndExchange Object");
             assertEquals(newval, "foo", "must not destroy newval");
-            Object x = UNSAFE.getObject(base, offset);
+            Object x = UNSAFE.getReference(base, offset);
             assertEquals(x, "foo", "success compareAndExchange Object value");
         }
 
         {
             String newval = baz;
-            Object r = UNSAFE.compareAndExchangeObject(base, offset, "bar", newval);
+            Object r = UNSAFE.compareAndExchangeReference(base, offset, "bar", newval);
             assertEquals(r, "foo", "failing compareAndExchange Object");
             assertEquals(newval, "baz", "must not destroy newval");
-            Object x = UNSAFE.getObject(base, offset);
+            Object x = UNSAFE.getReference(base, offset);
             assertEquals(x, "foo", "failing compareAndExchange Object value");
         }
 
-        UNSAFE.putObject(base, offset, "bar");
+        UNSAFE.putReference(base, offset, "bar");
         {
             String newval = foo;
             boolean success = false;
             for (int c = 0; c < WEAK_ATTEMPTS && !success; c++) {
-                success = UNSAFE.weakCompareAndSetObject(base, offset, "bar", newval);
+                success = UNSAFE.weakCompareAndSetReference(base, offset, "bar", newval);
                 assertEquals(newval, "foo", "must not destroy newval");
             }
             assertEquals(success, true, "weakCompareAndSet Object");
-            Object x = UNSAFE.getObject(base, offset);
+            Object x = UNSAFE.getReference(base, offset);
             assertEquals(x, "foo", "weakCompareAndSet Object");
         }
     }
