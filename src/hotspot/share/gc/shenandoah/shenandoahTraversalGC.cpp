@@ -53,6 +53,7 @@
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 
 #include "memory/iterator.hpp"
+#include "memory/metaspace.hpp"
 #include "memory/resourceArea.hpp"
 
 /**
@@ -620,6 +621,9 @@ void ShenandoahTraversalGC::final_traversal_collection() {
 
     // No more marking expected
     _heap->mark_complete_marking_context();
+
+    // Resize metaspace
+    MetaspaceGC::compute_new_size();
 
     // Still good? We can now trash the cset, and make final verification
     {
