@@ -85,7 +85,7 @@ void ShenandoahControlThread::run_service() {
     // Figure out if we have pending requests.
     bool alloc_failure_pending = _alloc_failure_gc.is_set();
     bool has_requested_gc = _gc_requested.is_set();
-    bool explicit_gc_requested = is_explicit_gc(_requested_gc_cause);
+    bool explicit_gc_requested = has_requested_gc && is_explicit_gc(_requested_gc_cause);
 
     // This control loop iteration have seen this much allocations.
     size_t allocs_seen = Atomic::xchg<size_t>(0, &_allocs_seen);
