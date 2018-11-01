@@ -232,6 +232,7 @@ ShenandoahRootEvacuator::ShenandoahRootEvacuator(ShenandoahHeap* heap, uint n_wo
 }
 
 ShenandoahRootEvacuator::~ShenandoahRootEvacuator() {
+  delete _evacuation_tasks;
   ShenandoahHeap::heap()->phase_timings()->record_workers_end(_phase);
 }
 
