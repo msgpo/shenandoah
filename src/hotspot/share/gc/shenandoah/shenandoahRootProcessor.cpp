@@ -254,7 +254,7 @@ void ShenandoahRootEvacuator::process_evacuate_roots(OopClosure* oops,
   }
 
   if (_evacuation_tasks->try_claim_task(SHENANDOAH_EVAC_jvmti_oops_do)) {
-    ShenandoahIsAliveClosure is_alive;
+    ShenandoahForwardedIsAliveClosure is_alive;
     ShenandoahWorkerTimingsTracker timer(worker_times, ShenandoahPhaseTimings::JVMTIRoots, worker_id);
     JvmtiExport::weak_oops_do(&is_alive, oops);
   }
