@@ -302,7 +302,7 @@ oop ShenandoahBarrierSet::write_barrier_impl(oop obj) {
 }
 
 oop ShenandoahBarrierSet::write_barrier(oop obj) {
-  if (ShenandoahWriteBarrier) {
+  if (ShenandoahWriteBarrier && _heap->has_forwarded_objects()) {
     return write_barrier_impl(obj);
   } else {
     return obj;
