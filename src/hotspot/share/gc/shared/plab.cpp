@@ -80,8 +80,6 @@ void PLAB::retire() {
 size_t PLAB::retire_internal() {
   size_t result = 0;
   if (_top < _hard_end) {
-    assert(pointer_delta(_hard_end, _top) >= (size_t)(oopDesc::header_size() + Universe::heap()->oop_extra_words()),
-           "better have enough space left to fill with dummy");
     Universe::heap()->fill_with_dummy_object(_top, _hard_end, true);
     result += invalidate();
   }

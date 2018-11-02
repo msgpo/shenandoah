@@ -289,8 +289,6 @@ class CollectedHeap : public CHeapObj<mtInternal> {
   virtual oop array_allocate(Klass* klass, int size, int length, bool do_zero, TRAPS);
   virtual oop class_allocate(Klass* klass, int size, TRAPS);
 
-  virtual uint oop_extra_words();
-
   // Utilities for turning raw memory into filler objects.
   //
   // min_fill_size() is the smallest region that can be filled.

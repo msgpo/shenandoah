@@ -1815,10 +1815,6 @@ HeapWord* ShenandoahHeap::tlab_post_allocation_setup(HeapWord* obj) {
   return result;
 }
 
-uint ShenandoahHeap::oop_extra_words() {
-  return BrooksPointer::word_size();
-}
-
 ShenandoahForwardedIsAliveClosure::ShenandoahForwardedIsAliveClosure() :
   _mark_context(ShenandoahHeap::heap()->marking_context()) {
 }

@@ -614,8 +614,6 @@ public:
   oop array_allocate(Klass* klass, int size, int length, bool do_zero, TRAPS);
   oop class_allocate(Klass* klass, int size, TRAPS);
 
-  uint oop_extra_words();
-
   void notify_mutator_alloc_words(size_t words, bool waste);
 
   // Shenandoah supports TLAB allocation

@@ -382,8 +382,6 @@ void ShenandoahBarrierSetAssembler::tlab_allocate(MacroAssembler* masm, Register
   assert_different_registers(obj, var_size_in_bytes);
   Register end = t2;
 
-  int oop_extra_words = Universe::heap()->oop_extra_words();
-
   __ ldr(obj, Address(rthread, JavaThread::tlab_top_offset()));
   if (var_size_in_bytes == noreg) {
     __ lea(end, Address(obj, (int) (con_size_in_bytes + BrooksPointer::byte_size())));
