@@ -166,6 +166,11 @@ void ShenandoahControlThread::run_service() {
     assert (!gc_requested || cause != GCCause::_last_gc_cause, "GC cause should be set");
 
     if (gc_requested) {
+      if (heuristics->has_metaspace_oom()) {
+        // Some of vmTestbase/metaspace tests depend on following line to count GC cycles
+        log_info(gc)("Cause: %s", GCCause::to_string(GCCause::_metadata_GC_threshold));
+      }
+
       heap->reset_bytes_allocated_since_gc_start();
 
       // If GC was requested, we are sampling the counters even without actual triggers
