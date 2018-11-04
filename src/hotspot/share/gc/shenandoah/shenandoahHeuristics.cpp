@@ -230,7 +230,10 @@ bool ShenandoahHeuristics::should_start_update_refs() {
 }
 
 bool ShenandoahHeuristics::should_start_normal_gc() const {
+  // Perform GC to cleanup metaspace
   if (has_metaspace_oom()) {
+    // Some of vmTestbase/metaspace tests depend on following line to count GC cycles
+    log_info(gc)("Trigger: %s", GCCause::to_string(GCCause::_metadata_GC_threshold));
     return true;
   }
 
