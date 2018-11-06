@@ -32,6 +32,7 @@
 #include "opto/idealKit.hpp"
 #include "opto/macro.hpp"
 #include "opto/narrowptrnode.hpp"
+#include "opto/rootnode.hpp"
 
 ShenandoahBarrierSetC2* ShenandoahBarrierSetC2::bsc2() {
   return reinterpret_cast<ShenandoahBarrierSetC2*>(BarrierSet::barrier_set()->barrier_set_c2());
@@ -1063,13 +1064,72 @@ ShenandoahBarrierSetC2State* ShenandoahBarrierSetC2::state() const {
 // If the BarrierSetC2 state has kept macro nodes in its compilation unit state to be
 // expanded later, then now is the time to do so.
 bool ShenandoahBarrierSetC2::expand_macro_nodes(PhaseMacroExpand* macro) const { return false; }
-void ShenandoahBarrierSetC2::verify_gc_barriers(bool post_parse) const {
+
 #ifdef ASSERT
-  if (ShenandoahVerifyOptoBarriers && !post_parse) {
+void ShenandoahBarrierSetC2::verify_gc_barriers(Compile* compile, CompilePhase phase) const {
+  if (ShenandoahVerifyOptoBarriers && phase == BarrierSetC2::BeforeExpand) {
     ShenandoahBarrierNode::verify(Compile::current()->root());
+  } else if (phase == BarrierSetC2::BeforeCodeGen) {
+    // Verify G1 pre-barriers
+    const int marking_offset = in_bytes(ShenandoahThreadLocalData::satb_mark_queue_active_offset());
+
+    ResourceArea *area = Thread::current()->resource_area();
+    Unique_Node_List visited(area);
+    Node_List worklist(area);
+    // We're going to walk control flow backwards starting from the Root
+    worklist.push(compile->root());
+    while (worklist.size() > 0) {
+      Node *x = worklist.pop();
+      if (x == NULL || x == compile->top()) continue;
+      if (visited.member(x)) {
+        continue;
+      } else {
+        visited.push(x);
+      }
+
+      if (x->is_Region()) {
+        for (uint i = 1; i < x->req(); i++) {
+          worklist.push(x->in(i));
+        }
+      } else {
+        worklist.push(x->in(0));
+        // We are looking for the pattern:
+        //                            /->ThreadLocal
+        // If->Bool->CmpI->LoadB->AddP->ConL(marking_offset)
+        //              \->ConI(0)
+        // We want to verify that the If and the LoadB have the same control
+        // See GraphKit::g1_write_barrier_pre()
+        if (x->is_If()) {
+          IfNode *iff = x->as_If();
+          if (iff->in(1)->is_Bool() && iff->in(1)->in(1)->is_Cmp()) {
+            CmpNode *cmp = iff->in(1)->in(1)->as_Cmp();
+            if (cmp->Opcode() == Op_CmpI && cmp->in(2)->is_Con() && cmp->in(2)->bottom_type()->is_int()->get_con() == 0
+                && cmp->in(1)->is_Load()) {
+              LoadNode *load = cmp->in(1)->as_Load();
+              if (load->Opcode() == Op_LoadB && load->in(2)->is_AddP() && load->in(2)->in(2)->Opcode() == Op_ThreadLocal
+                  && load->in(2)->in(3)->is_Con()
+                  && load->in(2)->in(3)->bottom_type()->is_intptr_t()->get_con() == marking_offset) {
+
+                Node *if_ctrl = iff->in(0);
+                Node *load_ctrl = load->in(0);
+
+                if (if_ctrl != load_ctrl) {
+                  // Skip possible CProj->NeverBranch in infinite loops
+                  if ((if_ctrl->is_Proj() && if_ctrl->Opcode() == Op_CProj)
+                      && (if_ctrl->in(0)->is_MultiBranch() && if_ctrl->in(0)->Opcode() == Op_NeverBranch)) {
+                    if_ctrl = if_ctrl->in(0)->in(0);
+                  }
+                }
+                assert(load_ctrl != NULL && if_ctrl == load_ctrl, "controls must match");
+              }
+            }
+          }
+        }
+      }
+    }
   }
-#endif
 }
+#endif
 
 Node* ShenandoahBarrierSetC2::ideal_node(PhaseGVN* phase, Node* n, bool can_reshape) const {
   if (is_shenandoah_wb_pre_call(n)) {

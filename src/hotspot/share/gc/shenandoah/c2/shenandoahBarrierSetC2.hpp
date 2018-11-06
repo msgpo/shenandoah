@@ -135,7 +135,10 @@ public:
   // If the BarrierSetC2 state has kept macro nodes in its compilation unit state to be
   // expanded later, then now is the time to do so.
   virtual bool expand_macro_nodes(PhaseMacroExpand* macro) const;
-  virtual void verify_gc_barriers(bool post_parse) const;
+
+#ifdef ASSERT
+  virtual void verify_gc_barriers(Compile* compile, CompilePhase phase) const;
+#endif
 
   virtual Node* ideal_node(PhaseGVN* phase, Node* n, bool can_reshape) const;
   virtual Node* identity_node(PhaseGVN* phase, Node* n) const;
