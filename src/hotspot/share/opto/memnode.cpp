@@ -1138,44 +1138,8 @@ Node* LoadNode::Identity(PhaseGVN* phase) {
       if (!phase->type(value)->higher_equal(phase->type(this)))
         return this;
     }
-
-#if INCLUDE_SHENANDOAHGC
-    PhaseIterGVN* igvn = phase->is_IterGVN();
-    if (UseShenandoahGC &&
-        igvn != NULL &&
-        value->is_Phi() &&
-        value->req() > 2 &&
-        value->in(1) != NULL &&
-        value->in(1)->is_ShenandoahBarrier()) {
-      if (igvn->_worklist.member(value) ||
-          igvn->_worklist.member(value->in(0)) ||
-          (value->in(0)->in(1) != NULL &&
-           value->in(0)->in(1)->is_IfProj() &&
-           (igvn->_worklist.member(value->in(0)->in(1)) ||
-            (value->in(0)->in(1)->in(0) != NULL &&
-             igvn->_worklist.member(value->in(0)->in(1)->in(0)))))) {
-        igvn->_worklist.push(this);
-        return this;
-      }
-    }
     // (This works even when value is a Con, but LoadNode::Value
     // usually runs first, producing the singleton type of the Con.)
-    if (UseShenandoahGC) {
-      BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-      Node* value_no_barrier = bs->step_over_gc_barrier(value->Opcode() == Op_EncodeP ? value->in(1) : value);
-      if (value->Opcode() == Op_EncodeP) {
-        if (value_no_barrier != value->in(1)) {
-          Node* encode = value->clone();
-          encode->set_req(1, value_no_barrier);
-          encode = phase->transform(encode);
-          return encode;
-        }
-      } else {
-        return value_no_barrier;
-      }
-    }
-#endif
-
     return value;
   }
 
@@ -1444,7 +1408,7 @@ Node *LoadNode::split_through_phi(PhaseGVN *phase) {
 
   // Do nothing here if Identity will find a value
   // (to avoid infinite chain of value phis generation).
-  if (!phase->eqv(this, this->Identity(phase)))
+  if (!phase->eqv(this, phase->apply_identity(this)))
     return NULL;
 
   // Select Region to split through.
@@ -1534,7 +1498,7 @@ Node *LoadNode::split_through_phi(PhaseGVN *phase) {
       // otherwise it will be not updated during igvn->transform since
       // igvn->type(x) is set to x->Value() already.
       x->raise_bottom_type(t);
-      Node *y = x->Identity(igvn);
+      Node *y = igvn->apply_identity(x);
       if (y != x) {
         x = y;
       } else {

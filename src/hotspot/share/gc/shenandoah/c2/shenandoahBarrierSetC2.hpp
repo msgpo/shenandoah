@@ -138,6 +138,7 @@ public:
   virtual void verify_gc_barriers(bool post_parse) const;
 
   virtual Node* ideal_node(PhaseGVN* phase, Node* n, bool can_reshape) const;
+  virtual Node* identity_node(PhaseGVN* phase, Node* n) const;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP

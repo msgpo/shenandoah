@@ -1071,7 +1071,7 @@ void ShenandoahBarrierSetC2::verify_gc_barriers(bool post_parse) const {
 #endif
 }
 
-Node* ShenandoahBarrierSetC2::ideal_node(PhaseGVN *phase, Node* n, bool can_reshape) const {
+Node* ShenandoahBarrierSetC2::ideal_node(PhaseGVN* phase, Node* n, bool can_reshape) const {
   if (is_shenandoah_wb_pre_call(n)) {
     uint cnt = ShenandoahBarrierSetC2::write_ref_field_pre_entry_Type()->domain()->cnt();
     if (n->req() > cnt) {
@@ -1085,7 +1085,76 @@ Node* ShenandoahBarrierSetC2::ideal_node(PhaseGVN *phase, Node* n, bool can_resh
       }
     }
   }
+  if (n->Opcode() == Op_CmpP) {
+    Node* in1 = n->in(1);
+    Node* in2 = n->in(2);
+    if (in1->bottom_type() == TypePtr::NULL_PTR) {
+      in2 = step_over_gc_barrier(in2);
+    }
+    if (in2->bottom_type() == TypePtr::NULL_PTR) {
+      in1 = step_over_gc_barrier(in1);
+    }
+    PhaseIterGVN* igvn = phase->is_IterGVN();
+    if (in1 != n->in(1)) {
+      if (igvn != NULL) {
+        n->set_req_X(1, in1, igvn);
+      } else {
+        n->set_req(1, in1);
+      }
+      assert(in2 == n->in(2), "only one change");
+      return n;
+    }
+    if (in2 != n->in(2)) {
+      if (igvn != NULL) {
+        n->set_req_X(2, in2, igvn);
+      } else {
+        n->set_req(2, in2);
+      }
+      return n;
+    }
+  }
+
   return NULL;
+}
+
+Node* ShenandoahBarrierSetC2::identity_node(PhaseGVN* phase, Node* n) const {
+  if (n->is_Load()) {
+    Node *mem = n->in(MemNode::Memory);
+    Node *value = n->as_Load()->can_see_stored_value(mem, phase);
+    if (value) {
+      PhaseIterGVN *igvn = phase->is_IterGVN();
+      if (igvn != NULL &&
+          value->is_Phi() &&
+          value->req() > 2 &&
+          value->in(1) != NULL &&
+          value->in(1)->is_ShenandoahBarrier()) {
+        if (igvn->_worklist.member(value) ||
+            igvn->_worklist.member(value->in(0)) ||
+            (value->in(0)->in(1) != NULL &&
+             value->in(0)->in(1)->is_IfProj() &&
+             (igvn->_worklist.member(value->in(0)->in(1)) ||
+              (value->in(0)->in(1)->in(0) != NULL &&
+               igvn->_worklist.member(value->in(0)->in(1)->in(0)))))) {
+          igvn->_worklist.push(n);
+          return n;
+        }
+      }
+      // (This works even when value is a Con, but LoadNode::Value
+      // usually runs first, producing the singleton type of the Con.)
+      Node *value_no_barrier = step_over_gc_barrier(value->Opcode() == Op_EncodeP ? value->in(1) : value);
+      if (value->Opcode() == Op_EncodeP) {
+        if (value_no_barrier != value->in(1)) {
+          Node *encode = value->clone();
+          encode->set_req(1, value_no_barrier);
+          encode = phase->transform(encode);
+          return encode;
+        }
+      } else {
+        return value_no_barrier;
+      }
+    }
+  }
+  return n;
 }
 
 bool ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(Node* n) {

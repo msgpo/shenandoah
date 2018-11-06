@@ -1083,14 +1083,6 @@ void CallLeafNode::dump_spec(outputStream *st) const {
 }
 #endif
 
-Node *CallLeafNode::Ideal(PhaseGVN *phase, bool can_reshape) {
-  Node* ideal = BarrierSet::barrier_set()->barrier_set_c2()->ideal_node(phase, this, can_reshape);
-  if (ideal != NULL) {
-    return ideal;
-  }
-  return CallNode::Ideal(phase, can_reshape);
-}
-
 //=============================================================================
 
 void SafePointNode::set_local(JVMState* jvms, uint idx, Node *c) {

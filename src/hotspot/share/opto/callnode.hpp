@@ -795,7 +795,6 @@ public:
   }
   virtual int   Opcode() const;
   virtual bool        guaranteed_safepoint()  { return false; }
-  virtual Node *Ideal(PhaseGVN *phase, bool can_reshape);
 #ifndef PRODUCT
   virtual void  dump_spec(outputStream *st) const;
 #endif

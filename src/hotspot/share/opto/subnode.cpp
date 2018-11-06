@@ -38,10 +38,6 @@
 #include "opto/phaseX.hpp"
 #include "opto/subnode.hpp"
 #include "runtime/sharedRuntime.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahSupport.hpp"
-#endif
 
 // Portions of code courtesy of Clifford Click
 
@@ -941,38 +937,6 @@ static inline Node* isa_const_java_mirror(PhaseGVN* phase, Node* n) {
 // checking to see an unknown klass subtypes a known klass with no subtypes;
 // this only happens on an exact match.  We can shorten this test by 1 load.
 Node *CmpPNode::Ideal( PhaseGVN *phase, bool can_reshape ) {
-  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-#if INCLUDE_SHENANDOAHGC
-  if (UseShenandoahGC) {
-    Node* in1 = in(1);
-    Node* in2 = in(2);
-    if (in1->bottom_type() == TypePtr::NULL_PTR) {
-      in2 = bs->step_over_gc_barrier(in2);
-    }
-    if (in2->bottom_type() == TypePtr::NULL_PTR) {
-      in1 = bs->step_over_gc_barrier(in1);
-    }
-    PhaseIterGVN* igvn = phase->is_IterGVN();
-    if (in1 != in(1)) {
-      if (igvn != NULL) {
-        set_req_X(1, in1, igvn);
-      } else {
-        set_req(1, in1);
-      }
-      assert(in2 == in(2), "only one change");
-      return this;
-    }
-    if (in2 != in(2)) {
-      if (igvn != NULL) {
-        set_req_X(2, in2, igvn);
-      } else {
-        set_req(2, in2);
-      }
-      return this;
-    }
-  }
-#endif
-
   // Normalize comparisons between Java mirrors into comparisons of the low-
   // level klass, where a dependent load could be shortened.
   //
