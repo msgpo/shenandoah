@@ -1086,33 +1086,6 @@ void PhaseMacroExpand::generate_unchecked_arraycopy(Node** ctrl, MergeMemNode** 
   finish_arraycopy_call(call, ctrl, mem, adr_type);
 }
 
-bool PhaseMacroExpand::clone_needs_postbarrier(ArrayCopyNode *ac) {
-  Node* src = ac->in(ArrayCopyNode::Src);
-  const TypeOopPtr* src_type = _igvn.type(src)->is_oopptr();
-  if (src_type->isa_instptr() != NULL) {
-    ciInstanceKlass* ik = src_type->klass()->as_instance_klass();
-    if ((src_type->klass_is_exact() || (!ik->is_interface() && !ik->has_subklass())) && !ik->has_injected_fields()) {
-      if (ik->has_object_fields()) {
-        return true;
-      } else {
-        if (!src_type->klass_is_exact()) {
-          C->dependencies()->assert_leaf_type(ik);
-        }
-      }
-    } else {
-      return true;
-    }
-  } else if (src_type->isa_aryptr()) {
-    BasicType src_elem  = src_type->klass()->as_array_klass()->element_type()->basic_type();
-    if (src_elem == T_OBJECT || src_elem == T_ARRAY) {
-      return true;
-    }
-  } else {
-    return true;
-  }
-  return false;
-}
-
 void PhaseMacroExpand::expand_arraycopy_node(ArrayCopyNode *ac) {
   Node* ctrl = ac->in(TypeFunc::Control);
   Node* io = ac->in(TypeFunc::I_O);
@@ -1137,21 +1110,9 @@ void PhaseMacroExpand::expand_arraycopy_node(ArrayCopyNode *ac) {
     Node* call = make_leaf_call(ctrl, mem, call_type, copyfunc_addr, copyfunc_name, raw_adr_type, src, dest, length XTOP);
     transform_later(call);
 
-    if (clone_needs_postbarrier(ac)) {
-      const TypePtr* raw_adr_type = TypeRawPtr::BOTTOM;
-      Node* c = new ProjNode(call,TypeFunc::Control);
-      transform_later(c);
-      Node* m = new ProjNode(call, TypeFunc::Memory);
-      transform_later(m);
-      BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-      bs->array_copy_post_barrier_at_expansion(ac, c, m, _igvn);
-      Node* out_c = ac->proj_out(TypeFunc::Control);
-      Node* out_m = ac->proj_out(TypeFunc::Memory);
-      _igvn.replace_node(out_c, c);
-      _igvn.replace_node(out_m, m);
-    } else {
-      _igvn.replace_node(ac, call);
-    }
+    BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+    bs->clone_barrier_at_expansion(ac, call, _igvn);
+
     return;
   } else if (ac->is_copyof() || ac->is_copyofrange() || ac->is_cloneoop()) {
     Node* mem = ac->in(TypeFunc::Memory);

@@ -176,7 +176,6 @@ private:
                                     Node* src,  Node* src_offset,
                                     Node* dest, Node* dest_offset,
                                     Node* copy_length, bool dest_uninitialized);
-  bool clone_needs_postbarrier(ArrayCopyNode *ac);
 
   void expand_arraycopy_node(ArrayCopyNode *ac);
 

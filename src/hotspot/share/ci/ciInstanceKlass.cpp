@@ -69,7 +69,6 @@ ciInstanceKlass::ciInstanceKlass(Klass* k) :
   _is_unsafe_anonymous = ik->is_unsafe_anonymous();
   _nonstatic_fields = NULL; // initialized lazily by compute_nonstatic_fields:
   _has_injected_fields = -1;
-  _has_object_fields = -1;
   _implementor = NULL; // we will fill these lazily
 
   // Ensure that the metadata wrapped by the ciMetadata is kept alive by GC.
@@ -127,7 +126,6 @@ ciInstanceKlass::ciInstanceKlass(ciSymbol* name,
   _has_nonstatic_fields = false;
   _nonstatic_fields = NULL;
   _has_injected_fields = -1;
-  _has_object_fields = -1;
   _is_unsafe_anonymous = false;
   _loader = loader;
   _protection_domain = protection_domain;
@@ -560,17 +558,10 @@ void ciInstanceKlass::compute_injected_fields() {
   _has_injected_fields = has_injected_fields;
 }
 
-void ciInstanceKlass::compute_object_fields() {
-  for (int i = 0; i < nof_nonstatic_fields(); i++) {
-    ciField* f = nonstatic_field_at(i);
-    if (f->layout_type() == T_OBJECT) {
-      assert(_has_object_fields == -1 || _has_object_fields == 1, "broken concurrent initialization");
-      _has_object_fields = 1;
-      return;
-    }
-  }
-  assert(_has_object_fields == -1 || _has_object_fields == 0, "broken concurrent initialization");
-  _has_object_fields = 0;
+bool ciInstanceKlass::has_object_fields() const {
+  GUARDED_VM_ENTRY(
+      return get_instanceKlass()->nonstatic_oop_map_size() > 0;
+    );
 }
 
 // ------------------------------------------------------------------

@@ -75,15 +75,17 @@ private:
   void insert_pre_barrier(GraphKit* kit, Node* base_oop, Node* offset,
                           Node* pre_val, bool need_mem_bar) const;
 
+  static bool clone_needs_postbarrier(ArrayCopyNode *ac, PhaseIterGVN& igvn);
+
 protected:
   virtual void resolve_address(C2Access& access) const;
   virtual Node* load_at_resolved(C2Access& access, const Type* val_type) const;
   virtual Node* store_at_resolved(C2Access& access, C2AccessValue& val) const;
-  virtual Node* atomic_cmpxchg_val_at_resolved(C2AtomicAccess& access, Node* expected_val,
+  virtual Node* atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                Node* new_val, const Type* val_type) const;
-  virtual Node* atomic_cmpxchg_bool_at_resolved(C2AtomicAccess& access, Node* expected_val,
+  virtual Node* atomic_cmpxchg_bool_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                 Node* new_val, const Type* value_type) const;
-  virtual Node* atomic_xchg_at_resolved(C2AtomicAccess& access, Node* new_val, const Type* val_type) const;
+  virtual Node* atomic_xchg_at_resolved(C2AtomicParseAccess& access, Node* new_val, const Type* val_type) const;
 
 public:
   static ShenandoahBarrierSetC2* bsc2();
@@ -113,8 +115,7 @@ public:
 
   // These are general helper methods used by C2
   virtual bool array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const;
-  virtual Node* array_copy_load_store_barrier(PhaseGVN *phase, bool can_reshape, Node* v, MergeMemNode* mem, Node*& ctl) const;
-  virtual void array_copy_post_barrier_at_expansion(ArrayCopyNode* ac, Node*& c, Node*& m, PhaseIterGVN& igvn) const;
+  virtual void clone_barrier_at_expansion(ArrayCopyNode* ac, Node* call, PhaseIterGVN& igvn) const;
 
   // Support for GC barriers emitted during parsing
   virtual bool is_gc_barrier_node(Node* node) const;
