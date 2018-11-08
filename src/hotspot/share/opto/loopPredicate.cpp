@@ -361,7 +361,7 @@ void PhaseIdealLoop::clone_loop_predicates_fix_mem(ProjNode* dom_proj , ProjNode
           }
           igvn->replace_input_of(call, TypeFunc::Memory, mm);
         }
-        igvn->replace_input_of(phi, r->req()-1, dom_use->in(dom_r->find_edge(other_dom_proj)));
+        igvn->replace_input_of(phi, r->find_edge(other_proj), dom_use->in(dom_r->find_edge(other_dom_proj)));
       }
     }
   }

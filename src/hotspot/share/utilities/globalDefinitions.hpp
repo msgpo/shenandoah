@@ -926,7 +926,6 @@ class LocationValue;
 class ConstantValue;
 class IllegalValue;
 
-class PrivilegedElement;
 class MonitorArray;
 
 class MonitorInfo;

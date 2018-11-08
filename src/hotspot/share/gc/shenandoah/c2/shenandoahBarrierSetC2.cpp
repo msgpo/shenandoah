@@ -1226,3 +1226,29 @@ bool ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(Node* n) {
   }
   return n->outcnt() > 0;
 }
+
+bool ShenandoahBarrierSetC2::flatten_gc_alias_type(const TypePtr*& adr_type) const {
+  int offset = adr_type->offset();
+  if (offset == BrooksPointer::byte_offset()) {
+    if (adr_type->isa_aryptr()) {
+      adr_type = TypeAryPtr::make(adr_type->ptr(), adr_type->isa_aryptr()->ary(), adr_type->isa_aryptr()->klass(), false, offset);
+    } else if (adr_type->isa_instptr()) {
+      adr_type = TypeInstPtr::make(adr_type->ptr(), ciEnv::current()->Object_klass(), false, NULL, offset);
+    }
+    return true;
+  } else {
+    return false;
+  }
+}
+
+#ifdef ASSERT
+bool ShenandoahBarrierSetC2::verify_gc_alias_type(const TypePtr* adr_type, int offset) const {
+  if (offset == BrooksPointer::byte_offset() &&
+      (adr_type->base() == Type::AryPtr || adr_type->base() == Type::OopPtr)) {
+    return true;
+  } else {
+    return false;
+  }
+}
+#endif
+

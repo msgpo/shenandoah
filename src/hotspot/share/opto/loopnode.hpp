@@ -1087,7 +1087,7 @@ public:
 
   static void clone_loop_predicates_fix_mem(ProjNode* dom_proj , ProjNode* proj,
                                             PhaseIdealLoop* loop_phase,
-                                            PhaseIterGVN* igvn );
+                                            PhaseIterGVN* igvn);
 
   static Node* clone_loop_predicates(Node* old_entry, Node* new_entry,
                                          bool clone_limit_check,

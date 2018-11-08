@@ -140,6 +140,11 @@ public:
   virtual void verify_gc_barriers(Compile* compile, CompilePhase phase) const;
 #endif
 
+  virtual bool flatten_gc_alias_type(const TypePtr*& adr_type) const;
+#ifdef ASSERT
+  virtual bool verify_gc_alias_type(const TypePtr* adr_type, int offset) const;
+#endif
+
   virtual Node* ideal_node(PhaseGVN* phase, Node* n, bool can_reshape) const;
   virtual Node* identity_node(PhaseGVN* phase, Node* n) const;
 };

@@ -76,9 +76,6 @@
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
-#if INCLUDE_G1GC
-#include "gc/g1/g1ThreadLocalData.hpp"
-#endif // INCLUDE_G1GC
 #if INCLUDE_ZGC
 #include "gc/z/c2/zBarrierSetC2.hpp"
 #endif
@@ -1473,11 +1470,8 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
         tj = TypeInstPtr::MARK;
         ta = TypeAryPtr::RANGE; // generic ignored junk
         ptr = TypePtr::BotPTR;
-#if INCLUDE_SHENANDOAHGC
-      } else if (offset == BrooksPointer::byte_offset() && UseShenandoahGC) {
-        // Need to distinguish brooks ptr as is.
-        tj = ta = TypeAryPtr::make(ptr,ta->ary(),ta->klass(),false,offset);
-#endif
+      } else if (BarrierSet::barrier_set()->barrier_set_c2()->flatten_gc_alias_type(tj)) {
+        ta = tj->isa_aryptr();
       } else {                  // Random constant offset into array body
         offset = Type::OffsetBot;   // Flatten constant access into array body
         tj = ta = TypeAryPtr::make(ptr,ta->ary(),ta->klass(),false,offset);
@@ -1542,7 +1536,9 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
       if (!is_known_inst) { // Do it only for non-instance types
         tj = to = TypeInstPtr::make(TypePtr::BotPTR, env()->Object_klass(), false, NULL, offset);
       }
-    } else if (SHENANDOAHGC_ONLY((offset != BrooksPointer::byte_offset() || !UseShenandoahGC) &&) (offset < 0 || offset >= k->size_helper() * wordSize)) {
+    } else if (BarrierSet::barrier_set()->barrier_set_c2()->flatten_gc_alias_type(tj)) {
+      to = tj->is_instptr();
+    } else if (offset < 0 || offset >= k->size_helper() * wordSize) {
       // Static fields are in the space above the normal instance
       // fields in the java.lang.Class instance.
       if (to->klass() != ciEnv::current()->Class_klass()) {
@@ -1641,7 +1637,7 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
           (offset == oopDesc::mark_offset_in_bytes() && tj->base() == Type::AryPtr) ||
           (offset == oopDesc::klass_offset_in_bytes() && tj->base() == Type::AryPtr) ||
           (offset == arrayOopDesc::length_offset_in_bytes() && tj->base() == Type::AryPtr) ||
-          (UseShenandoahGC SHENANDOAHGC_ONLY(&& offset == BrooksPointer::byte_offset() && tj->base() == Type::AryPtr)),
+          (BarrierSet::barrier_set()->barrier_set_c2()->verify_gc_alias_type(tj, offset)),
           "For oops, klasses, raw offset must be constant; for arrays the offset is never known" );
   assert( tj->ptr() != TypePtr::TopPTR &&
           tj->ptr() != TypePtr::AnyNull &&

@@ -205,6 +205,7 @@ void ShenandoahCodeRoots::remove_nmethod(nmethod* nm) {
       break;
     }
     case 2: {
+      ResourceMark rm;
       ShenandoahNMethodOopDetector detector;
       nm->oops_do(&detector, /* allow_zombie = */ true);
 
