@@ -554,6 +554,7 @@ public:
   bool is_in(const void* p) const;
 
   size_t obj_size(oop obj) const;
+  virtual ptrdiff_t cell_header_size() const;
 
   // All objects can potentially move
   bool is_scavengable(oop obj) { return true; };

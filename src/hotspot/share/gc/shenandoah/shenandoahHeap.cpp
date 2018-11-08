@@ -2789,6 +2789,10 @@ size_t ShenandoahHeap::obj_size(oop obj) const {
   return CollectedHeap::obj_size(obj) + ShenandoahBrooksPointer::word_size();
 }
 
+ptrdiff_t ShenandoahHeap::cell_header_size() const {
+  return ShenandoahBrooksPointer::byte_size();
+}
+
 BoolObjectClosure* ShenandoahIsAliveSelector::is_alive_closure() {
   return ShenandoahHeap::heap()->has_forwarded_objects() ? reinterpret_cast<BoolObjectClosure*>(&_fwd_alive_cl)
                                                          : reinterpret_cast<BoolObjectClosure*>(&_alive_cl);

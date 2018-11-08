@@ -26,14 +26,11 @@
 #include "asm/codeBuffer.hpp"
 #include "asm/macroAssembler.hpp"
 #include "asm/macroAssembler.inline.hpp"
+#include "gc/shared/collectedHeap.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/icache.hpp"
 #include "runtime/os.hpp"
 #include "runtime/thread.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
-#endif
 
 
 // Implementation of AbstractAssembler
@@ -311,43 +308,32 @@ const char* AbstractAssembler::code_string(const char* str) {
   return NULL;
 }
 
-bool MacroAssembler::needs_explicit_null_check(intptr_t offset) {
+bool MacroAssembler::uses_implicit_null_check(void* address) {
   // Exception handler checks the nmethod's implicit null checks table
   // only when this method returns false.
-#ifdef AARCH64
-  // AArch64 addresses passed from the signal handler may have
-  // their top 8 bits zeroed. That affects the case where
-  // Shenandoah tries to load a Brooks pointer via a null oop.
-  const uintptr_t address_bits = (uintptr_t)0xfffffffffffful;
-#else
-  const uintptr_t address_bits = ~(uintptr_t)0;
-#endif
+  intptr_t int_address = reinterpret_cast<intptr_t>(address);
+  intptr_t cell_header_size = Universe::heap()->cell_header_size();
+  size_t region_size = os::vm_page_size() + cell_header_size;
 #ifdef _LP64
   if (UseCompressedOops && Universe::narrow_oop_base() != NULL) {
-    assert (Universe::heap() != NULL, "java heap should be initialized");
-    // The first page after heap_base is unmapped and
-    // the 'offset' is equal to [heap_base + offset] for
-    // narrow oop implicit null checks.
-    uintptr_t base = (uintptr_t)Universe::narrow_oop_base();
-    int adj = 0;
-#if INCLUDE_SHENANDOAHGC
-    if (UseShenandoahGC) {
-      adj = ShenandoahBrooksPointer::byte_offset();
-      assert(adj < 0, "no need for positive adjustments");
-    }
-#endif
-    if ((uintptr_t)((offset - adj) & address_bits) >= base) {
-      // Normalize offset for the next check.
-      offset = (intptr_t)(pointer_delta((void*)offset, (void*)base, 1));
+    // A SEGV can legitimately happen in C2 code at address
+    // (heap_base + offset) if  Matcher::narrow_oop_use_complex_address
+    // is configured to allow narrow oops field loads to be implicitly
+    // null checked
+    intptr_t start = ((intptr_t)Universe::narrow_oop_base()) - cell_header_size;
+    intptr_t end = start + region_size;
+    if (int_address >= start && int_address < end) {
+      return true;
     }
   }
 #endif
+  intptr_t start = -cell_header_size;
+  intptr_t end = start + region_size;
+  return int_address >= start && int_address < end;
+}
 
-#if INCLUDE_SHENANDOAHGC
-  if (UseShenandoahGC && ((offset & address_bits) == (ShenandoahBrooksPointer::byte_offset() & address_bits))) {
-    return false;
-  }
-#endif
-
-  return offset < 0 || os::vm_page_size() <= offset;
+bool MacroAssembler::needs_explicit_null_check(intptr_t offset) {
+  // Check if offset is outside of [-cell_header_size, os::vm_page_size)
+  return offset < -Universe::heap()->cell_header_size() ||
+         offset >= os::vm_page_size();
 }
