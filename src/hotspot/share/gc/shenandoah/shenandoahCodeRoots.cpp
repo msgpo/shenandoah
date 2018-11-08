@@ -97,6 +97,7 @@ void ShenandoahParallelCodeHeapIterator::parallel_blobs_do(CodeBlobClosure* f) {
 
 class ShenandoahNMethodOopDetector : public OopClosure {
 private:
+  ResourceMark rm; // For growable array allocation below.
   GrowableArray<oop*> _oops;
 
 public:
@@ -205,7 +206,6 @@ void ShenandoahCodeRoots::remove_nmethod(nmethod* nm) {
       break;
     }
     case 2: {
-      ResourceMark rm;
       ShenandoahNMethodOopDetector detector;
       nm->oops_do(&detector, /* allow_zombie = */ true);
 
