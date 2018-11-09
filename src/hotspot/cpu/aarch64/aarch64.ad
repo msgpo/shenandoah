@@ -1001,7 +1001,6 @@ source_hpp %{
 #include "gc/shared/collectedHeap.hpp"
 #include "opto/addnode.hpp"
 #if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/brooksPointer.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
 #endif
 

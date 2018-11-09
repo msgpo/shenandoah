@@ -31,11 +31,6 @@
 #include "opto/macro.hpp"
 #include "opto/runtime.hpp"
 #include "utilities/align.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
-#include "gc/shenandoah/c2/shenandoahSupport.hpp"
-#include "gc/shenandoah/shenandoahRuntime.hpp"
-#endif
 
 void PhaseMacroExpand::insert_mem_bar(Node** ctrl, Node** mem, int opcode, Node* precedent) {
   MemBarNode* mb = MemBarNode::make(C, opcode, Compile::AliasIdxBot, precedent);
