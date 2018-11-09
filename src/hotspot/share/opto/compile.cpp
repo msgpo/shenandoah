@@ -2804,6 +2804,18 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   }
 #endif
   // Count FPU ops and common calls, implements item (3)
+  bool gc_handled = BarrierSet::barrier_set()->barrier_set_c2()->final_graph_reshaping(this, n, nop);
+  if (!gc_handled) {
+    final_graph_reshaping_main_switch(n, frc, nop);
+  }
+
+  // Collect CFG split points
+  if (n->is_MultiBranch() && !n->is_RangeCheck()) {
+    frc._tests.push(n);
+  }
+}
+
+void Compile::final_graph_reshaping_main_switch(Node* n, Final_Reshape_Counts& frc, uint nop) {
   switch( nop ) {
   // Count all float operations that may use FPU
   case Op_AddF:
@@ -2856,17 +2868,6 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_CallLeafNoFP: {
     assert (n->is_Call(), "");
     CallNode *call = n->as_Call();
-#if INCLUDE_SHENANDOAHGC
-    if (UseShenandoahGC && ShenandoahBarrierSetC2::is_shenandoah_wb_pre_call(call)) {
-      uint cnt = ShenandoahBarrierSetC2::write_ref_field_pre_entry_Type()->domain()->cnt();
-      if (call->req() > cnt) {
-        assert(call->req() == cnt+1, "only one extra input");
-        Node* addp = call->in(cnt);
-        assert(!ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(addp), "useless address computation?");
-        call->del_req(cnt);
-      }
-    }
-#endif
     // Count call sites where the FP mode bit would have to be flipped.
     // Do not count uncommon runtime calls:
     // uncommon_trap, _complete_monitor_locking, _complete_monitor_unlocking,
@@ -2938,12 +2939,6 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_CompareAndExchangeL:
   case Op_CompareAndExchangeP:
   case Op_CompareAndExchangeN:
-  case Op_ShenandoahCompareAndSwapP:
-  case Op_ShenandoahCompareAndSwapN:
-  case Op_ShenandoahWeakCompareAndSwapN:
-  case Op_ShenandoahWeakCompareAndSwapP:
-  case Op_ShenandoahCompareAndExchangeP:
-  case Op_ShenandoahCompareAndExchangeN:
   case Op_GetAndAddS:
   case Op_GetAndAddB:
   case Op_GetAndAddI:
@@ -2967,18 +2962,13 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
   case Op_LoadL_unaligned:
   case Op_LoadPLocked:
   case Op_LoadP:
-#if INCLUDE_ZGC
-  case Op_LoadBarrierSlowReg:
-  case Op_LoadBarrierWeakSlowReg:
-#endif
   case Op_LoadN:
   case Op_LoadRange:
   case Op_LoadS: {
   handle_mem:
 #ifdef ASSERT
     if( VerifyOptoOopOffsets ) {
-      assert( n->is_Mem(), "" );
-      MemNode *mem  = (MemNode*)n;
+      MemNode* mem  = n->as_Mem();
       // Check to see if address types have grounded out somehow.
       const TypeInstPtr *tp = mem->in(MemNode::Address)->bottom_type()->isa_instptr();
       assert( !tp || oop_offset_is_sane(tp), "" );
@@ -3411,13 +3401,6 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
       n->set_req(MemBarNode::Precedent, top());
     }
     break;
-#if INCLUDE_SHENANDOAHGC
-  case Op_ShenandoahReadBarrier:
-    break;
-  case Op_ShenandoahWriteBarrier:
-    assert(false, "should have been expanded already");
-    break;
-#endif
   case Op_MemBarAcquire: {
     if (n->as_MemBar()->trailing_load() && n->req() > MemBarNode::Precedent) {
       // At parse time, the trailing MemBarAcquire for a volatile load
@@ -3503,15 +3486,10 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
     break;
   }
   default:
-    assert( !n->is_Call(), "" );
-    assert( !n->is_Mem(), "" );
-    assert( nop != Op_ProfileBoolean, "should be eliminated during IGVN");
+    assert(!n->is_Call(), "");
+    assert(!n->is_Mem(), "");
+    assert(nop != Op_ProfileBoolean, "should be eliminated during IGVN");
     break;
-  }
-
-  // Collect CFG split points
-  if (n->is_MultiBranch() && !n->is_RangeCheck()) {
-    frc._tests.push(n);
   }
 }
 

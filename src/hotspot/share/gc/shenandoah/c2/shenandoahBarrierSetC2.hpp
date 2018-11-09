@@ -148,6 +148,7 @@ public:
 
   virtual Node* ideal_node(PhaseGVN* phase, Node* n, bool can_reshape) const;
   virtual Node* identity_node(PhaseGVN* phase, Node* n) const;
+  virtual bool final_graph_reshaping(Compile* compile, Node* n, uint opcode) const;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP

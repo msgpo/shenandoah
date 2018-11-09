@@ -1241,6 +1241,50 @@ bool ShenandoahBarrierSetC2::flatten_gc_alias_type(const TypePtr*& adr_type) con
   }
 }
 
+bool ShenandoahBarrierSetC2::final_graph_reshaping(Compile* compile, Node* n, uint opcode) const {
+  switch (opcode) {
+    case Op_CallLeaf:
+    case Op_CallLeafNoFP: {
+      assert (n->is_Call(), "");
+      CallNode *call = n->as_Call();
+      if (ShenandoahBarrierSetC2::is_shenandoah_wb_pre_call(call)) {
+        uint cnt = ShenandoahBarrierSetC2::write_ref_field_pre_entry_Type()->domain()->cnt();
+        if (call->req() > cnt) {
+          assert(call->req() == cnt + 1, "only one extra input");
+          Node *addp = call->in(cnt);
+          assert(!ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(addp), "useless address computation?");
+          call->del_req(cnt);
+        }
+      }
+      return false;
+    }
+    case Op_ShenandoahCompareAndSwapP:
+    case Op_ShenandoahCompareAndSwapN:
+    case Op_ShenandoahWeakCompareAndSwapN:
+    case Op_ShenandoahWeakCompareAndSwapP:
+    case Op_ShenandoahCompareAndExchangeP:
+    case Op_ShenandoahCompareAndExchangeN:
+#ifdef ASSERT
+      if( VerifyOptoOopOffsets ) {
+        MemNode* mem  = n->as_Mem();
+        // Check to see if address types have grounded out somehow.
+        const TypeInstPtr *tp = mem->in(MemNode::Address)->bottom_type()->isa_instptr();
+        ciInstanceKlass *k = tp->klass()->as_instance_klass();
+        bool oop_offset_is_sane = k->contains_field_offset(tp->offset());
+        assert( !tp || oop_offset_is_sane, "" );
+      }
+#endif
+      return true;
+    case Op_ShenandoahReadBarrier:
+      return true;
+    case Op_ShenandoahWriteBarrier:
+      assert(false, "should have been expanded already");
+      return true;
+    default:
+      return false;
+  }
+}
+
 #ifdef ASSERT
 bool ShenandoahBarrierSetC2::verify_gc_alias_type(const TypePtr* adr_type, int offset) const {
   if (offset == ShenandoahBrooksPointer::byte_offset() &&
