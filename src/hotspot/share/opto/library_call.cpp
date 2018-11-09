@@ -58,6 +58,7 @@
 #include "runtime/sharedRuntime.hpp"
 #include "utilities/macros.hpp"
 
+
 class LibraryIntrinsic : public InlineCallGenerator {
   // Extend the set of intrinsics known to the runtime:
  public:
