@@ -38,36 +38,65 @@
  *        compiler.c2.aarch64.TestVolatileStore
  *        compiler.c2.aarch64.TestUnsafeVolatileStore
  *        compiler.c2.aarch64.TestUnsafeVolatileCAS
+ *        compiler.c2.aarch64.TestUnsafeVolatileWeakCAS
+ *        compiler.c2.aarch64.TestUnsafeVolatileCAE
+ *        compiler.c2.aarch64.TestUnsafeVolatileGAS
+ *        compiler.c2.aarch64.TestUnsafeVolatileGAA
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestVolatileLoad Shenandoah
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestVolatileStore Shenandoah
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestUnsafeVolatileLoad Shenandoah
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestUnsafeVolatileStore Shenandoah
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestUnsafeVolatileCAS Shenandoah
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileWeakCAS Shenandoah
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileCAE Shenandoah
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileGAS Shenandoah
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileGAA Shenandoah
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestVolatileLoad ShenandoahTraversal
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestVolatileStore ShenandoahTraversal
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestUnsafeVolatileLoad ShenandoahTraversal
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestUnsafeVolatileStore ShenandoahTraversal
  *
- * @run driver compiler.c2.aarch64.TestVolatilesSerial
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
  *      TestUnsafeVolatileCAS ShenandoahTraversal
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileWeakCAS ShenandoahTraversal
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileCAE ShenandoahTraversal
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileGAS ShenandoahTraversal
+ *
+ * @run driver compiler.c2.aarch64.TestVolatilesShenandoah
+ *      TestUnsafeVolatileGAA ShenandoahTraversal
+ *
  */
 
 package compiler.c2.aarch64;
