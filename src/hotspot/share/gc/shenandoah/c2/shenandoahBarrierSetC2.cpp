@@ -867,7 +867,7 @@ Node* ShenandoahBarrierSetC2::obj_allocate(PhaseMacroExpand* macro, Node* ctrl, 
   PhaseIterGVN& igvn = macro->igvn();
 
   // Allocate several words more for the Shenandoah brooks pointer.
-  size_in_bytes = new AddXNode(size_in_bytes, igvn.MakeConX(BrooksPointer::byte_size()));
+  size_in_bytes = new AddXNode(size_in_bytes, igvn.MakeConX(ShenandoahBrooksPointer::byte_size()));
   macro->transform_later(size_in_bytes);
 
   Node* fast_oop = BarrierSetC2::obj_allocate(macro, ctrl, mem, toobig_false, size_in_bytes,
@@ -875,11 +875,11 @@ Node* ShenandoahBarrierSetC2::obj_allocate(PhaseMacroExpand* macro, Node* ctrl, 
                                               prefetch_lines);
 
   // Bump up object for Shenandoah brooks pointer.
-  fast_oop = new AddPNode(macro->top(), fast_oop, igvn.MakeConX(BrooksPointer::byte_size()));
+  fast_oop = new AddPNode(macro->top(), fast_oop, igvn.MakeConX(ShenandoahBrooksPointer::byte_size()));
   macro->transform_later(fast_oop);
 
   // Initialize Shenandoah brooks pointer to point to the object itself.
-  fast_oop_rawmem = macro->make_store(fast_oop_ctrl, fast_oop_rawmem, fast_oop, BrooksPointer::byte_offset(), fast_oop, T_OBJECT);
+  fast_oop_rawmem = macro->make_store(fast_oop_ctrl, fast_oop_rawmem, fast_oop, ShenandoahBrooksPointer::byte_offset(), fast_oop, T_OBJECT);
 
   return fast_oop;
 }
@@ -1229,7 +1229,7 @@ bool ShenandoahBarrierSetC2::has_only_shenandoah_wb_pre_uses(Node* n) {
 
 bool ShenandoahBarrierSetC2::flatten_gc_alias_type(const TypePtr*& adr_type) const {
   int offset = adr_type->offset();
-  if (offset == BrooksPointer::byte_offset()) {
+  if (offset == ShenandoahBrooksPointer::byte_offset()) {
     if (adr_type->isa_aryptr()) {
       adr_type = TypeAryPtr::make(adr_type->ptr(), adr_type->isa_aryptr()->ary(), adr_type->isa_aryptr()->klass(), false, offset);
     } else if (adr_type->isa_instptr()) {
@@ -1243,7 +1243,7 @@ bool ShenandoahBarrierSetC2::flatten_gc_alias_type(const TypePtr*& adr_type) con
 
 #ifdef ASSERT
 bool ShenandoahBarrierSetC2::verify_gc_alias_type(const TypePtr* adr_type, int offset) const {
-  if (offset == BrooksPointer::byte_offset() &&
+  if (offset == ShenandoahBrooksPointer::byte_offset() &&
       (adr_type->base() == Type::AryPtr || adr_type->base() == Type::OopPtr)) {
     return true;
   } else {
