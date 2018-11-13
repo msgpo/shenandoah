@@ -334,6 +334,8 @@ bool MacroAssembler::uses_implicit_null_check(void* address) {
 
 bool MacroAssembler::needs_explicit_null_check(intptr_t offset) {
   // Check if offset is outside of [-cell_header_size, os::vm_page_size)
+  // Patching code expects to return true for "special" offsets like -1.
+  if (offset == -1) return true;
   return offset < -Universe::heap()->cell_header_size() ||
          offset >= os::vm_page_size();
 }
