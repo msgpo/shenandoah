@@ -202,10 +202,12 @@ public:
 
   static void optimize_after_expansion(VectorSet &visited, Node_Stack &nstack, Node_List &old_new, PhaseIdealLoop* phase);
   static void merge_back_to_back_tests(Node* n, PhaseIdealLoop* phase);
+  static bool identical_backtoback_ifs(Node *n, PhaseIdealLoop* phase);
   static void fix_ctrl(Node* barrier, Node* region, const MemoryGraphFixer& fixer, Unique_Node_List& uses, Unique_Node_List& uses_to_ignore, uint last, PhaseIdealLoop* phase);
 
   static void optimize_before_expansion(PhaseIdealLoop* phase, GrowableArray<MemoryGraphFixer*> memory_graph_fixers, bool include_lsm);
   Node* would_subsume(ShenandoahBarrierNode* other, PhaseIdealLoop* phase);
+  static IfNode* find_unswitching_candidate(const IdealLoopTree *loop, PhaseIdealLoop* phase);
 };
 
 class ShenandoahWBMemProjNode : public Node {

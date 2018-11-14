@@ -29,10 +29,6 @@
 #include "opto/loopnode.hpp"
 #include "opto/opaquenode.hpp"
 #include "opto/rootnode.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
-#endif
 
 //================= Loop Unswitching =====================
 //
@@ -58,7 +54,7 @@
 //------------------------------policy_unswitching-----------------------------
 // Return TRUE or FALSE if the loop should be unswitched
 // (ie. clone loop with an invariant test that does not exit the loop)
-bool IdealLoopTree::policy_unswitching(PhaseIdealLoop *phase, bool shenandoah_opts) const {
+bool IdealLoopTree::policy_unswitching( PhaseIdealLoop *phase ) const {
   if( !LoopUnswitching ) {
     return false;
   }
@@ -79,18 +75,17 @@ bool IdealLoopTree::policy_unswitching(PhaseIdealLoop *phase, bool shenandoah_op
   if (head->unswitch_count() + 1 > head->unswitch_max()) {
     return false;
   }
-  return phase->find_unswitching_candidate(this, shenandoah_opts) != NULL;
+  return phase->find_unswitching_candidate(this) != NULL;
 }
 
 //------------------------------find_unswitching_candidate-----------------------------
 // Find candidate "if" for unswitching
-IfNode* PhaseIdealLoop::find_unswitching_candidate(const IdealLoopTree *loop, bool shenandoah_opts) const {
+IfNode* PhaseIdealLoop::find_unswitching_candidate(const IdealLoopTree *loop) const {
 
   // Find first invariant test that doesn't exit the loop
   LoopNode *head = loop->_head->as_Loop();
   IfNode* unswitch_iff = NULL;
   Node* n = head->in(LoopNode::LoopBackControl);
-  int loop_has_sfpts = -1;
   while (n != head) {
     Node* n_dom = idom(n);
     if (n->is_Region()) {
@@ -104,29 +99,6 @@ IfNode* PhaseIdealLoop::find_unswitching_candidate(const IdealLoopTree *loop, bo
             if (loop->is_invariant(bol) && !loop->is_loop_exit(iff)) {
               unswitch_iff = iff;
             }
-#if INCLUDE_SHENANDOAHGC
-            else if (shenandoah_opts &&
-                       (ShenandoahWriteBarrierNode::is_heap_stable_test(iff)) &&
-                       (loop_has_sfpts == -1 || loop_has_sfpts == 0)) {
-              assert(UseShenandoahGC, "shenandoah only");
-              assert(!loop->is_loop_exit(iff), "both branches should be in the loop");
-              if (loop_has_sfpts == -1) {
-                for(uint i = 0; i < loop->_body.size(); i++) {
-                  Node *m = loop->_body[i];
-                  if (m->is_SafePoint() && !m->is_CallLeaf()) {
-                    loop_has_sfpts = 1;
-                    break;
-                  }
-                }
-                if (loop_has_sfpts == -1) {
-                  loop_has_sfpts = 0;
-                }
-              }
-              if (!loop_has_sfpts) {
-                unswitch_iff = iff;
-              }
-            }
-#endif
           }
         }
       }
@@ -140,19 +112,11 @@ IfNode* PhaseIdealLoop::find_unswitching_candidate(const IdealLoopTree *loop, bo
 // Clone loop with an invariant test (that does not exit) and
 // insert a clone of the test that selects which version to
 // execute.
-void PhaseIdealLoop::do_unswitching(IdealLoopTree *loop, Node_List &old_new, bool shenandoah_opts) {
-
+void PhaseIdealLoop::do_unswitching (IdealLoopTree *loop, Node_List &old_new) {
   // Find first invariant test that doesn't exit the loop
   LoopNode *head = loop->_head->as_Loop();
 
-  IfNode* unswitch_iff = find_unswitching_candidate((const IdealLoopTree *)loop, shenandoah_opts);
-
-#if INCLUDE_SHENANDOAHGC
-  if (ShenandoahWriteBarrierNode::is_heap_stable_test(unswitch_iff)) {
-    ShenandoahWriteBarrierNode::move_heap_stable_test_out_of_loop(unswitch_iff, this);
-  }
-#endif
-
+  IfNode* unswitch_iff = find_unswitching_candidate((const IdealLoopTree *)loop);
   assert(unswitch_iff != NULL, "should be at least one");
 
 #ifndef PRODUCT

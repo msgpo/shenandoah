@@ -1068,29 +1068,6 @@ static bool merge_point_too_heavy(Compile* C, Node* region) {
   }
 }
 
-static bool merge_point_safe_helper(Node* m) {
-  if (m->is_FastLock()) {
-    return false;
-  }
-#ifdef _LP64
-  if (m->Opcode() == Op_ConvI2L) {
-    return false;
-  }
-  if (m->is_CastII() && m->isa_CastII()->has_range_check()) {
-    return false;
-  }
-#endif
-  if (m->is_ShenandoahBarrier()) {
-    for (DUIterator_Fast imax, i = m->fast_outs(imax); i < imax; i++) {
-      Node* n = m->fast_out(i);
-      if (!merge_point_safe_helper(n)) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
 static bool merge_point_safe(Node* region) {
   // 4799512: Stop split_if_with_blocks from splitting a block with a ConvI2LNode
   // having a PhiNode input. This sidesteps the dangerous case where the split
@@ -1107,9 +1084,20 @@ static bool merge_point_safe(Node* region) {
     if (n->is_Phi()) {
       for (DUIterator_Fast jmax, j = n->fast_outs(jmax); j < jmax; j++) {
         Node* m = n->fast_out(j);
-        if (!merge_point_safe_helper(m)) {
+        if (m->is_FastLock())
+          return false;
+#if INCLUDE_SHENANDOAHGC
+        if (m->is_ShenandoahBarrier() && m->has_out_with(Op_FastLock)) {
           return false;
         }
+#endif
+#ifdef _LP64
+        if (m->Opcode() == Op_ConvI2L)
+          return false;
+        if (m->is_CastII() && m->isa_CastII()->has_range_check()) {
+          return false;
+        }
+#endif
       }
     }
   }
@@ -1139,31 +1127,13 @@ bool PhaseIdealLoop::identical_backtoback_ifs(Node *n) {
   if (!n->is_If() || n->is_CountedLoopEnd()) {
     return false;
   }
+  if (!n->in(0)->is_Region()) {
+    return false;
+  }
   Node* region = n->in(0);
-
-#if INCLUDE_SHENANDOAHGC
-  bool shenandoah_heap_stable = ShenandoahWriteBarrierNode::is_heap_stable_test(n);
-#endif
-
-  if (!region->is_Region()) {
-    return false;
-  }
   Node* dom = idom(region);
-  if (!dom->is_If()) {
+  if (!dom->is_If() || dom->in(1) != n->in(1)) {
     return false;
-  }
-
-#if INCLUDE_SHENANDOAHGC
-  if (shenandoah_heap_stable) {
-    if (!ShenandoahWriteBarrierNode::is_heap_stable_test(dom)) {
-      return false;
-    }
-  } else
-#endif
-  {
-    if (dom->in(1) != n->in(1)) {
-      return false;
-    }
   }
   IfNode* dom_if = dom->as_If();
   Node* proj_true = dom_if->proj_out(1);
@@ -1183,7 +1153,6 @@ bool PhaseIdealLoop::identical_backtoback_ifs(Node *n) {
 }
 
 bool PhaseIdealLoop::can_split_if(Node *n_ctrl) {
-  assert(n_ctrl->is_Region(), "broken");
   if (C->live_nodes() > 35000) {
     return false; // Method too big
   }

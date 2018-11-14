@@ -1172,6 +1172,32 @@ Node* ShenandoahBarrierSetC2::ideal_node(PhaseGVN* phase, Node* n, bool can_resh
       }
       return n;
     }
+  } else if (can_reshape &&
+             n->Opcode() == Op_If &&
+             ShenandoahWriteBarrierNode::is_heap_stable_test(n) &&
+             n->in(0) != NULL) {
+    Node* dom = n->in(0);
+    Node* prev_dom = n;
+    int op = n->Opcode();
+    int dist = 16;
+    // Search up the dominator tree for another heap stable test
+    while (dom->Opcode() != op    ||  // Not same opcode?
+           !ShenandoahWriteBarrierNode::is_heap_stable_test(dom) ||  // Not same input 1?
+           prev_dom->in(0) != dom) {  // One path of test does not dominate?
+      if (dist < 0) return NULL;
+
+      dist--;
+      prev_dom = dom;
+      dom = IfNode::up_one_dom(dom);
+      if (!dom) return NULL;
+    }
+
+    // Check that we did not follow a loop back to ourselves
+    if (n == dom) {
+      return NULL;
+    }
+
+    return n->as_If()->dominated_by(prev_dom, phase->is_IterGVN());
   }
 
   return NULL;

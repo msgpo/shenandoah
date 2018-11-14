@@ -457,7 +457,7 @@ bool ShenandoahWriteBarrierNode::is_gc_state_load(Node *n) {
   if (!UseShenandoahGC) {
     return false;
   }
-  if (n->Opcode() != Op_LoadB) {
+  if (n->Opcode() != Op_LoadB && n->Opcode() != Op_LoadUB) {
     return false;
   }
   Node* addp = n->in(MemNode::Address);
@@ -2916,20 +2916,72 @@ void ShenandoahWriteBarrierNode::move_heap_stable_test_out_of_loop(IfNode* iff, 
   Node* loop_head = loop->_head;
   Node* entry_c = loop_head->in(LoopNode::EntryControl);
 
-  Node* load = iff->in(1)->in(1)->in(1)->in(1);
+  Node* bol = iff->in(1);
+  Node* cmp = bol->in(1);
+  Node* andi = cmp->in(1);
+  Node* load = andi->in(1);
+
   assert(is_gc_state_load(load), "broken");
   if (!phase->is_dominator(load->in(0), entry_c)) {
     Node* mem_ctrl = NULL;
     Node* mem = dom_mem(load->in(MemNode::Memory), loop_head, Compile::AliasIdxRaw, mem_ctrl, phase);
-    phase->igvn().replace_input_of(load, MemNode::Memory, mem);
-    phase->igvn().replace_input_of(load, 0, entry_c);
-    phase->set_ctrl_and_loop(load, entry_c);
+    load = load->clone();
+    load->set_req(MemNode::Memory, mem);
+    load->set_req(0, entry_c);
+    phase->register_new_node(load, entry_c);
+    andi = andi->clone();
+    andi->set_req(1, load);
+    phase->register_new_node(andi, entry_c);
+    cmp = cmp->clone();
+    cmp->set_req(1, andi);
+    phase->register_new_node(cmp, entry_c);
+    bol = bol->clone();
+    bol->set_req(1, cmp);
+    phase->register_new_node(bol, entry_c);
+
+    Node* old_bol =iff->in(1);
+    phase->igvn().replace_input_of(iff, 1, bol);
   }
+}
+
+bool ShenandoahWriteBarrierNode::identical_backtoback_ifs(Node *n, PhaseIdealLoop* phase) {
+  if (!n->is_If() || n->is_CountedLoopEnd()) {
+    return false;
+  }
+  Node* region = n->in(0);
+
+  if (!region->is_Region()) {
+    return false;
+  }
+  Node* dom = phase->idom(region);
+  if (!dom->is_If()) {
+    return false;
+  }
+
+  if (!is_heap_stable_test(n) || !is_heap_stable_test(dom)) {
+    return false;
+  }
+
+  IfNode* dom_if = dom->as_If();
+  Node* proj_true = dom_if->proj_out(1);
+  Node* proj_false = dom_if->proj_out(0);
+
+  for (uint i = 1; i < region->req(); i++) {
+    if (phase->is_dominator(proj_true, region->in(i))) {
+      continue;
+    }
+    if (phase->is_dominator(proj_false, region->in(i))) {
+      continue;
+    }
+    return false;
+  }
+
+  return true;
 }
 
 void ShenandoahWriteBarrierNode::merge_back_to_back_tests(Node* n, PhaseIdealLoop* phase) {
   assert(is_heap_stable_test(n), "no other tests");
-  if (phase->identical_backtoback_ifs(n)) {
+  if (identical_backtoback_ifs(n, phase)) {
     Node* n_ctrl = n->in(0);
     if (phase->can_split_if(n_ctrl)) {
       IfNode* dom_if = phase->idom(n_ctrl)->as_If();
@@ -2963,6 +3015,51 @@ void ShenandoahWriteBarrierNode::merge_back_to_back_tests(Node* n, PhaseIdealLoo
   }
 }
 
+IfNode* ShenandoahWriteBarrierNode::find_unswitching_candidate(const IdealLoopTree *loop, PhaseIdealLoop* phase) {
+  // Find first invariant test that doesn't exit the loop
+  LoopNode *head = loop->_head->as_Loop();
+  IfNode* unswitch_iff = NULL;
+  Node* n = head->in(LoopNode::LoopBackControl);
+  int loop_has_sfpts = -1;
+  while (n != head) {
+    Node* n_dom = phase->idom(n);
+    if (n->is_Region()) {
+      if (n_dom->is_If()) {
+        IfNode* iff = n_dom->as_If();
+        if (iff->in(1)->is_Bool()) {
+          BoolNode* bol = iff->in(1)->as_Bool();
+          if (bol->in(1)->is_Cmp()) {
+            // If condition is invariant and not a loop exit,
+            // then found reason to unswitch.
+            if (is_heap_stable_test(iff) &&
+                (loop_has_sfpts == -1 || loop_has_sfpts == 0)) {
+              assert(!loop->is_loop_exit(iff), "both branches should be in the loop");
+              if (loop_has_sfpts == -1) {
+                for(uint i = 0; i < loop->_body.size(); i++) {
+                  Node *m = loop->_body[i];
+                  if (m->is_SafePoint() && !m->is_CallLeaf()) {
+                    loop_has_sfpts = 1;
+                    break;
+                  }
+                }
+                if (loop_has_sfpts == -1) {
+                  loop_has_sfpts = 0;
+                }
+              }
+              if (!loop_has_sfpts) {
+                unswitch_iff = iff;
+              }
+            }
+          }
+        }
+      }
+    }
+    n = n_dom;
+  }
+  return unswitch_iff;
+}
+
+
 void ShenandoahWriteBarrierNode::optimize_after_expansion(VectorSet &visited, Node_Stack &stack, Node_List &old_new, PhaseIdealLoop* phase) {
   Node_List heap_stable_tests;
   Node_List gc_state_loads;
@@ -2980,10 +3077,10 @@ void ShenandoahWriteBarrierNode::optimize_after_expansion(VectorSet &visited, No
       }
     } else {
       stack.pop();
-      if (ShenandoahCommonGCStateLoads && ShenandoahWriteBarrierNode::is_gc_state_load(n)) {
+      if (ShenandoahCommonGCStateLoads && is_gc_state_load(n)) {
         gc_state_loads.push(n);
       }
-      if (n->is_If() && ShenandoahWriteBarrierNode::is_heap_stable_test(n)) {
+      if (n->is_If() && is_heap_stable_test(n)) {
         heap_stable_tests.push(n);
       }
     }
@@ -2995,7 +3092,7 @@ void ShenandoahWriteBarrierNode::optimize_after_expansion(VectorSet &visited, No
     for (uint i = 0; i < gc_state_loads.size(); i++) {
       Node* n = gc_state_loads.at(i);
       if (n->outcnt() != 0) {
-        progress |= ShenandoahWriteBarrierNode::try_common_gc_state_load(n, phase);
+        progress |= try_common_gc_state_load(n, phase);
       }
     }
   } while (progress);
@@ -3016,23 +3113,32 @@ void ShenandoahWriteBarrierNode::optimize_after_expansion(VectorSet &visited, No
           !loop->_irreducible) {
         LoopNode* head = loop->_head->as_Loop();
         if ((!head->is_CountedLoop() || head->as_CountedLoop()->is_main_loop() || head->as_CountedLoop()->is_normal_loop()) &&
-            !seen.test_set(head->_idx) &&
-            loop->policy_unswitching(phase, true)) {
-          IfNode* iff = phase->find_unswitching_candidate(loop, true);
-          if (iff != NULL && is_heap_stable_test(iff)) {
+            !seen.test_set(head->_idx)) {
+          IfNode* iff = find_unswitching_candidate(loop, phase);
+          if (iff != NULL) {
+            Node* bol = iff->in(1);
             if (head->is_strip_mined()) {
               head->verify_strip_mined(0);
-              OuterStripMinedLoopNode* outer = head->as_CountedLoop()->outer_loop();
-              OuterStripMinedLoopEndNode* le = head->outer_loop_end();
-              Node* new_outer = new LoopNode(outer->in(LoopNode::EntryControl), outer->in(LoopNode::LoopBackControl));
-              phase->register_control(new_outer, phase->get_loop(outer), outer->in(LoopNode::EntryControl));
-              Node* new_le = new IfNode(le->in(0), le->in(1), le->_prob, le->_fcnt);
-              phase->register_control(new_le, phase->get_loop(le), le->in(0));
-              phase->lazy_replace(outer, new_outer);
-              phase->lazy_replace(le, new_le);
-              head->clear_strip_mined();
             }
-            phase->do_unswitching(loop, old_new, true);
+            move_heap_stable_test_out_of_loop(iff, phase);
+            if (loop->policy_unswitching(phase)) {
+              if (head->is_strip_mined()) {
+                OuterStripMinedLoopNode* outer = head->as_CountedLoop()->outer_loop();
+                OuterStripMinedLoopEndNode* le = head->outer_loop_end();
+                Node* new_outer = new LoopNode(outer->in(LoopNode::EntryControl), outer->in(LoopNode::LoopBackControl));
+                phase->register_control(new_outer, phase->get_loop(outer), outer->in(LoopNode::EntryControl));
+                Node* new_le = new IfNode(le->in(0), le->in(1), le->_prob, le->_fcnt);
+                phase->register_control(new_le, phase->get_loop(le), le->in(0));
+                phase->lazy_replace(outer, new_outer);
+                phase->lazy_replace(le, new_le);
+                head->clear_strip_mined();
+              }
+              phase->do_unswitching(loop, old_new);
+            } else {
+              // Not proceeding with unswitching. Move load back in
+              // the loop.
+              phase->igvn().replace_input_of(iff, 1, bol);
+            }
           }
         }
       }
