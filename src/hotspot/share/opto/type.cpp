@@ -39,10 +39,6 @@
 #include "opto/node.hpp"
 #include "opto/opcodes.hpp"
 #include "opto/type.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
-#endif
 
 // Portions of code courtesy of Clifford Click
 
@@ -2967,10 +2963,6 @@ TypeOopPtr::TypeOopPtr(TYPES t, PTR ptr, ciKlass* k, bool xk, ciObject* o, int o
   if (_offset > 0 || _offset == Type::OffsetTop || _offset == Type::OffsetBot) {
     if (_offset == oopDesc::klass_offset_in_bytes()) {
       _is_ptr_to_narrowklass = UseCompressedClassPointers;
-#if INCLUDE_SHENANDOAHGC
-    } else if (_offset == ShenandoahBrooksPointer::byte_offset()) {
-      // Shenandoah doesn't support compressed forwarding pointers
-#endif
     } else if (klass() == NULL) {
       // Array with unknown body type
       assert(this->isa_aryptr(), "only arrays without klass");
@@ -2996,8 +2988,7 @@ TypeOopPtr::TypeOopPtr(TYPES t, PTR ptr, ciKlass* k, bool xk, ciObject* o, int o
           assert(this->isa_instptr(), "must be an instance ptr.");
           _is_ptr_to_narrowoop = false;
         } else if (klass() == ciEnv::current()->Class_klass() &&
-                   _offset >= InstanceMirrorKlass::offset_of_static_fields() &&
-                   !UseShenandoahGC) {
+                   _offset >= InstanceMirrorKlass::offset_of_static_fields()) {
           // Static fields
           assert(o != NULL, "must be constant");
           ciInstanceKlass* k = o->as_instance()->java_lang_Class_klass()->as_instance_klass();
