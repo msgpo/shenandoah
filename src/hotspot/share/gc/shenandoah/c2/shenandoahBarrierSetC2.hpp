@@ -150,6 +150,11 @@ public:
   virtual Node* ideal_node(PhaseGVN* phase, Node* n, bool can_reshape) const;
   virtual Node* identity_node(PhaseGVN* phase, Node* n) const;
   virtual bool final_graph_reshaping(Compile* compile, Node* n, uint opcode) const;
+
+  virtual bool escape_add_to_con_graph(ConnectionGraph* conn_graph, PhaseGVN* gvn, Unique_Node_List* delayed_worklist, Node* n, uint opcode) const;
+  virtual bool escape_add_final_edges(ConnectionGraph* conn_graph, PhaseGVN* gvn, Node* n, uint opcode) const;
+  virtual bool escape_has_out_with_unsafe_object(Node* n) const;
+  virtual bool escape_is_barrier_node(Node* n) const;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP

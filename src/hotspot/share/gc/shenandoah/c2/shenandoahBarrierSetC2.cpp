@@ -28,6 +28,7 @@
 #include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
 #include "gc/shenandoah/c2/shenandoahSupport.hpp"
 #include "opto/arraycopynode.hpp"
+#include "opto/escape.hpp"
 #include "opto/graphKit.hpp"
 #include "opto/idealKit.hpp"
 #include "opto/macro.hpp"
@@ -1327,3 +1328,92 @@ bool ShenandoahBarrierSetC2::verify_gc_alias_type(const TypePtr* adr_type, int o
 }
 #endif
 
+bool ShenandoahBarrierSetC2::escape_add_to_con_graph(ConnectionGraph* conn_graph, PhaseGVN* gvn, Unique_Node_List* delayed_worklist, Node* n, uint opcode) const {
+  switch (opcode) {
+    case Op_ShenandoahCompareAndExchangeP:
+    case Op_ShenandoahCompareAndExchangeN:
+      conn_graph->add_objload_to_connection_graph(n, delayed_worklist);
+      // fallthrough
+    case Op_ShenandoahWeakCompareAndSwapP:
+    case Op_ShenandoahWeakCompareAndSwapN:
+    case Op_ShenandoahCompareAndSwapP:
+    case Op_ShenandoahCompareAndSwapN:
+      conn_graph->add_to_congraph_unsafe_access(n, opcode, delayed_worklist);
+      return true;
+    case Op_StoreP: {
+      Node* adr = n->in(MemNode::Address);
+      const Type* adr_type = gvn->type(adr);
+      // Pointer stores in G1 barriers looks like unsafe access.
+      // Ignore such stores to be able scalar replace non-escaping
+      // allocations.
+      if (adr_type->isa_rawptr() && adr->is_AddP()) {
+        Node* base = conn_graph->get_addp_base(adr);
+        if (base->Opcode() == Op_LoadP &&
+          base->in(MemNode::Address)->is_AddP()) {
+          adr = base->in(MemNode::Address);
+          Node* tls = conn_graph->get_addp_base(adr);
+          if (tls->Opcode() == Op_ThreadLocal) {
+             int offs = (int) gvn->find_intptr_t_con(adr->in(AddPNode::Offset), Type::OffsetBot);
+             const int buf_offset = in_bytes(ShenandoahThreadLocalData::satb_mark_queue_buffer_offset());
+             if (offs == buf_offset) {
+               return true; // Pre barrier previous oop value store.
+             }
+          }
+        }
+      }
+      return false;
+    }
+    case Op_ShenandoahReadBarrier:
+    case Op_ShenandoahWriteBarrier:
+      // Barriers 'pass through' its arguments. I.e. what goes in, comes out.
+      // It doesn't escape.
+      conn_graph->add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(ShenandoahBarrierNode::ValueIn), delayed_worklist);
+      break;
+    case Op_ShenandoahEnqueueBarrier:
+      conn_graph->add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(1), delayed_worklist);
+      break;
+    default:
+      // Nothing
+      break;
+  }
+  return false;
+}
+
+bool ShenandoahBarrierSetC2::escape_add_final_edges(ConnectionGraph* conn_graph, PhaseGVN* gvn, Node* n, uint opcode) const {
+  switch (opcode) {
+    case Op_ShenandoahCompareAndExchangeP:
+    case Op_ShenandoahCompareAndExchangeN: {
+      Node *adr = n->in(MemNode::Address);
+      conn_graph->add_local_var_and_edge(n, PointsToNode::NoEscape, adr, NULL);
+      // fallthrough
+    }
+    case Op_ShenandoahCompareAndSwapP:
+    case Op_ShenandoahCompareAndSwapN:
+    case Op_ShenandoahWeakCompareAndSwapP:
+    case Op_ShenandoahWeakCompareAndSwapN:
+      return conn_graph->add_final_edges_unsafe_access(n, opcode);
+    case Op_ShenandoahReadBarrier:
+    case Op_ShenandoahWriteBarrier:
+      // Barriers 'pass through' its arguments. I.e. what goes in, comes out.
+      // It doesn't escape.
+      conn_graph->add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(ShenandoahBarrierNode::ValueIn), NULL);
+      return true;
+    case Op_ShenandoahEnqueueBarrier:
+      conn_graph->add_local_var_and_edge(n, PointsToNode::NoEscape, n->in(1), NULL);
+      return true;
+    default:
+      // Nothing
+      break;
+  }
+  return false;
+}
+
+bool ShenandoahBarrierSetC2::escape_has_out_with_unsafe_object(Node* n) const {
+  return n->has_out_with(Op_ShenandoahCompareAndExchangeP) || n->has_out_with(Op_ShenandoahCompareAndExchangeN) ||
+         n->has_out_with(Op_ShenandoahCompareAndSwapP, Op_ShenandoahCompareAndSwapN, Op_ShenandoahWeakCompareAndSwapP, Op_ShenandoahWeakCompareAndSwapN);
+
+}
+
+bool ShenandoahBarrierSetC2::escape_is_barrier_node(Node* n) const {
+  return n->is_ShenandoahBarrier();
+}
