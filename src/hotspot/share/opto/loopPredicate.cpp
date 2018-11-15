@@ -952,6 +952,15 @@ private:
   GrowableArray<float> _freqs; // cache frequencies
   PhaseIdealLoop* _phase;
 
+  void set_rounding(int mode) {
+    // fesetround is broken on windows
+    NOT_WINDOWS(fesetround(mode);)
+  }
+
+  void check_frequency(float f) {
+    NOT_WINDOWS(assert(f <= 1 && f >= 0, "Incorrect frequency");)
+  }
+
 public:
   PathFrequency(Node* dom, PhaseIdealLoop* phase)
     : _dom(dom), _stack(0), _phase(phase) {
@@ -959,7 +968,7 @@ public:
 
   float to(Node* n) {
     // post order walk on the CFG graph from n to _dom
-    fesetround(FE_TOWARDZERO); // make sure rounding doesn't push frequency above 1
+    set_rounding(FE_TOWARDZERO); // make sure rounding doesn't push frequency above 1
     IdealLoopTree* loop = _phase->get_loop(_dom);
     Node* c = n;
     for (;;) {
@@ -986,14 +995,14 @@ public:
                 inner_head = inner_loop->_head->as_Loop();
                 inner_head->verify_strip_mined(1);
               }
-              fesetround(FE_UPWARD);  // make sure rounding doesn't push frequency above 1
+              set_rounding(FE_UPWARD);  // make sure rounding doesn't push frequency above 1
               float loop_exit_cnt = 0.0f;
               for (uint i = 0; i < inner_loop->_body.size(); i++) {
                 Node *n = inner_loop->_body[i];
                 float c = inner_loop->compute_profile_trip_cnt_helper(n);
                 loop_exit_cnt += c;
               }
-              fesetround(FE_TOWARDZERO);
+              set_rounding(FE_TOWARDZERO);
               float cnt = -1;
               if (n->in(0)->is_If()) {
                 IfNode* iff = n->in(0)->as_If();
@@ -1013,9 +1022,9 @@ public:
                 cnt = p * jmp->_fcnt;
               }
               float this_exit_f = cnt > 0 ? cnt / loop_exit_cnt : 0;
-              assert(this_exit_f <= 1 && this_exit_f >= 0, "Incorrect frequency");
+              check_frequency(this_exit_f);
               f = f * this_exit_f;
-              assert(f <= 1 && f >= 0, "Incorrect frequency");
+              check_frequency(f);
             } else {
               float p = -1;
               if (n->in(0)->is_If()) {
@@ -1028,7 +1037,7 @@ public:
                 p = n->in(0)->as_Jump()->_probs[n->as_JumpProj()->_con];
               }
               f = f * p;
-              assert(f <= 1 && f >= 0, "Incorrect frequency");
+              check_frequency(f);
             }
             _freqs.at_put_grow(n->_idx, (float)f, -1);
             _stack.pop();
@@ -1036,7 +1045,7 @@ public:
             float prev_f = _freqs_stack.pop();
             float new_f = f;
             f = new_f + prev_f;
-            assert(f <= 1 && f >= 0, "Incorrect frequency");
+            check_frequency(f);
             uint i = _stack.index();
             if (i < n->req()) {
               c = n->in(i);
@@ -1049,8 +1058,8 @@ public:
           }
         }
         if (_stack.size() == 0) {
-          fesetround(FE_TONEAREST);
-          assert(f >= 0 && f <= 1, "should have been computed");
+          set_rounding(FE_TONEAREST);
+          check_frequency(f);
           return f;
         }
       } else if (c->is_Loop()) {
