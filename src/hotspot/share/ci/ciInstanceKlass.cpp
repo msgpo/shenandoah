@@ -36,10 +36,6 @@
 #include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/jniHandles.inline.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/shenandoahBrooksPointer.hpp"
-#endif
 
 // ciInstanceKlass
 //
@@ -203,12 +199,12 @@ ciConstantPoolCache* ciInstanceKlass::field_cache() {
 //
 ciInstanceKlass* ciInstanceKlass::get_canonical_holder(int offset) {
   #ifdef ASSERT
-  if (!((offset >= 0 && offset < layout_helper()) SHENANDOAHGC_ONLY(|| (UseShenandoahGC && offset == ShenandoahBrooksPointer::byte_offset())))) {
+  if (!(offset >= 0 && offset < layout_helper())) {
     tty->print("*** get_canonical_holder(%d) on ", offset);
     this->print();
     tty->print_cr(" ***");
-    fatal("offset must be tame");
-  }
+  };
+  assert(offset >= 0 && offset < layout_helper(), "offset must be tame");
   #endif
 
   if (offset < instanceOopDesc::base_offset_in_bytes()) {
