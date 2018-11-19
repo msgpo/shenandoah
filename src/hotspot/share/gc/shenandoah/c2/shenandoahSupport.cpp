@@ -2386,34 +2386,32 @@ void ShenandoahWriteBarrierNode::fix_null_check(Node* unc, Node* unc_ctrl, Node*
 }
 
 void ShenandoahWriteBarrierNode::in_cset_fast_test(Node*& ctrl, Node*& not_cset_ctrl, Node* val, Node* raw_mem, PhaseIdealLoop* phase) {
-  if (ShenandoahWriteBarrierCsetTestInIR) {
-    IdealLoopTree *loop = phase->get_loop(ctrl);
-    Node* raw_rbtrue = new CastP2XNode(ctrl, val);
-    phase->register_new_node(raw_rbtrue, ctrl);
-    Node* cset_offset = new URShiftXNode(raw_rbtrue, phase->igvn().intcon(ShenandoahHeapRegion::region_size_bytes_shift_jint()));
-    phase->register_new_node(cset_offset, ctrl);
-    Node* in_cset_fast_test_base_addr = phase->igvn().makecon(TypeRawPtr::make(ShenandoahHeap::in_cset_fast_test_addr()));
-    phase->set_ctrl(in_cset_fast_test_base_addr, phase->C->root());
-    Node* in_cset_fast_test_adr = new AddPNode(phase->C->top(), in_cset_fast_test_base_addr, cset_offset);
-    phase->register_new_node(in_cset_fast_test_adr, ctrl);
-    uint in_cset_fast_test_idx = Compile::AliasIdxRaw;
-    const TypePtr* in_cset_fast_test_adr_type = NULL; // debug-mode-only argument
-    debug_only(in_cset_fast_test_adr_type = phase->C->get_adr_type(in_cset_fast_test_idx));
-    Node* in_cset_fast_test_load = new LoadBNode(ctrl, raw_mem, in_cset_fast_test_adr, in_cset_fast_test_adr_type, TypeInt::BYTE, MemNode::unordered);
-    phase->register_new_node(in_cset_fast_test_load, ctrl);
-    Node* in_cset_fast_test_cmp = new CmpINode(in_cset_fast_test_load, phase->igvn().zerocon(T_INT));
-    phase->register_new_node(in_cset_fast_test_cmp, ctrl);
-    Node* in_cset_fast_test_test = new BoolNode(in_cset_fast_test_cmp, BoolTest::eq);
-    phase->register_new_node(in_cset_fast_test_test, ctrl);
-    IfNode* in_cset_fast_test_iff = new IfNode(ctrl, in_cset_fast_test_test, PROB_UNLIKELY(0.999), COUNT_UNKNOWN);
-    phase->register_control(in_cset_fast_test_iff, loop, ctrl);
+  IdealLoopTree *loop = phase->get_loop(ctrl);
+  Node* raw_rbtrue = new CastP2XNode(ctrl, val);
+  phase->register_new_node(raw_rbtrue, ctrl);
+  Node* cset_offset = new URShiftXNode(raw_rbtrue, phase->igvn().intcon(ShenandoahHeapRegion::region_size_bytes_shift_jint()));
+  phase->register_new_node(cset_offset, ctrl);
+  Node* in_cset_fast_test_base_addr = phase->igvn().makecon(TypeRawPtr::make(ShenandoahHeap::in_cset_fast_test_addr()));
+  phase->set_ctrl(in_cset_fast_test_base_addr, phase->C->root());
+  Node* in_cset_fast_test_adr = new AddPNode(phase->C->top(), in_cset_fast_test_base_addr, cset_offset);
+  phase->register_new_node(in_cset_fast_test_adr, ctrl);
+  uint in_cset_fast_test_idx = Compile::AliasIdxRaw;
+  const TypePtr* in_cset_fast_test_adr_type = NULL; // debug-mode-only argument
+  debug_only(in_cset_fast_test_adr_type = phase->C->get_adr_type(in_cset_fast_test_idx));
+  Node* in_cset_fast_test_load = new LoadBNode(ctrl, raw_mem, in_cset_fast_test_adr, in_cset_fast_test_adr_type, TypeInt::BYTE, MemNode::unordered);
+  phase->register_new_node(in_cset_fast_test_load, ctrl);
+  Node* in_cset_fast_test_cmp = new CmpINode(in_cset_fast_test_load, phase->igvn().zerocon(T_INT));
+  phase->register_new_node(in_cset_fast_test_cmp, ctrl);
+  Node* in_cset_fast_test_test = new BoolNode(in_cset_fast_test_cmp, BoolTest::eq);
+  phase->register_new_node(in_cset_fast_test_test, ctrl);
+  IfNode* in_cset_fast_test_iff = new IfNode(ctrl, in_cset_fast_test_test, PROB_UNLIKELY(0.999), COUNT_UNKNOWN);
+  phase->register_control(in_cset_fast_test_iff, loop, ctrl);
 
-    not_cset_ctrl = new IfTrueNode(in_cset_fast_test_iff);
-    phase->register_control(not_cset_ctrl, loop, in_cset_fast_test_iff);
+  not_cset_ctrl = new IfTrueNode(in_cset_fast_test_iff);
+  phase->register_control(not_cset_ctrl, loop, in_cset_fast_test_iff);
 
-    ctrl = new IfFalseNode(in_cset_fast_test_iff);
-    phase->register_control(ctrl, loop, in_cset_fast_test_iff);
-  }
+  ctrl = new IfFalseNode(in_cset_fast_test_iff);
+  phase->register_control(ctrl, loop, in_cset_fast_test_iff);
 }
 
 void ShenandoahWriteBarrierNode::call_wb_stub(Node*& ctrl, Node*& val, Node*& result_mem,
