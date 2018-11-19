@@ -113,6 +113,7 @@ IfNode* PhaseIdealLoop::find_unswitching_candidate(const IdealLoopTree *loop) co
 // insert a clone of the test that selects which version to
 // execute.
 void PhaseIdealLoop::do_unswitching (IdealLoopTree *loop, Node_List &old_new) {
+
   // Find first invariant test that doesn't exit the loop
   LoopNode *head = loop->_head->as_Loop();
 
