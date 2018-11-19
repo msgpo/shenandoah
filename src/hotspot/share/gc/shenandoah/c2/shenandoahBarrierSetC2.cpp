@@ -964,9 +964,9 @@ void ShenandoahBarrierSetC2::clone_barrier_at_expansion(ArrayCopyNode* ac, Node*
 
   Node* dest = ac->in(ArrayCopyNode::Dest);
   assert(dest->is_AddP(), "bad input");
-  Node* barrier_call = new CallLeafNoFPNode(ShenandoahBarrierSetC2::shenandoah_clone_barrier_Type(),
-                                            CAST_FROM_FN_PTR(address, ShenandoahRuntime::shenandoah_clone_barrier),
-                                            "shenandoah_clone_barrier", raw_adr_type);
+  Node* barrier_call = new CallLeafNode(ShenandoahBarrierSetC2::shenandoah_clone_barrier_Type(),
+                                        CAST_FROM_FN_PTR(address, ShenandoahRuntime::shenandoah_clone_barrier),
+                                        "shenandoah_clone_barrier", raw_adr_type);
   barrier_call->init_req(TypeFunc::Control, c);
   barrier_call->init_req(TypeFunc::I_O    , igvn.C->top());
   barrier_call->init_req(TypeFunc::Memory , m);
