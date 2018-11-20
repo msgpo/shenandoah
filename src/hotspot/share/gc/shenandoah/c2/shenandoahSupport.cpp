@@ -2430,7 +2430,7 @@ void ShenandoahWriteBarrierNode::call_wb_stub(Node*& ctrl, Node*& val, Node*& re
   mm->set_memory_at(Compile::AliasIdxRaw, raw_mem);
   phase->register_new_node(mm, ctrl);
 
-  Node* call = new CallLeafNode(ShenandoahBarrierSetC2::shenandoah_write_barrier_Type(), CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_barrier_JRT), "shenandoah_write_barrier", TypeRawPtr::BOTTOM);
+  Node* call = new CallLeafNoFPNode(ShenandoahBarrierSetC2::shenandoah_write_barrier_Type(), ShenandoahBarrierSetAssembler::shenandoah_wb_C(), "shenandoah_write_barrier", TypeRawPtr::BOTTOM);
   call->init_req(TypeFunc::Control, ctrl);
   call->init_req(TypeFunc::I_O, phase->C->top());
   call->init_req(TypeFunc::Memory, mm);
@@ -3155,7 +3155,8 @@ void ShenandoahBarrierNode::verify_raw_mem(RootNode* root) {
   nodes.push(root);
   for (uint next = 0; next < nodes.size(); next++) {
     Node *n  = nodes.at(next);
-    if (ShenandoahBarrierSetC2::is_shenandoah_wb_call(n)) {
+    if (n->Opcode() == Op_CallLeafNoFP &&
+        ShenandoahBarrierSetAssembler::is_shenandoah_wb_C_call(n->as_Call()->entry_point())) {
       controls.push(n);
       if (trace) { tty->print("XXXXXX verifying"); n->dump(); }
       for (uint next2 = 0; next2 < controls.size(); next2++) {

@@ -456,6 +456,8 @@ public:
   // 64 bits of each vector register.
   void push_call_clobbered_registers();
   void pop_call_clobbered_registers();
+  void push_call_clobbered_fp_registers();
+  void pop_call_clobbered_fp_registers();
 
   // now mov instructions for loading absolute addresses and 32 or
   // 64 bit integers

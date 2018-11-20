@@ -41,6 +41,7 @@
 #define __ masm->
 
 address ShenandoahBarrierSetAssembler::_shenandoah_wb = NULL;
+address ShenandoahBarrierSetAssembler::_shenandoah_wb_C = NULL;
 
 void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, DecoratorSet decorators, bool is_oop,
                                                        Register addr, Register count, RegSet saved_regs) {
@@ -616,6 +617,11 @@ address ShenandoahBarrierSetAssembler::shenandoah_wb() {
   return _shenandoah_wb;
 }
 
+address ShenandoahBarrierSetAssembler::shenandoah_wb_C() {
+  assert(_shenandoah_wb_C != NULL, "need write barrier stub");
+  return _shenandoah_wb_C;
+}
+
 #define __ cgen->assembler()->
 
 // Shenandoah write barrier.
@@ -627,31 +633,41 @@ address ShenandoahBarrierSetAssembler::shenandoah_wb() {
 //   r0: Pointer to evacuated OOP.
 //
 // Trash rscratch1, rscratch2.  Preserve everything else.
-address ShenandoahBarrierSetAssembler::generate_shenandoah_wb(StubCodeGenerator* cgen) {
+address ShenandoahBarrierSetAssembler::generate_shenandoah_wb(StubCodeGenerator* cgen, bool c_abi, bool do_cset_test) {
 
   __ align(6);
   StubCodeMark mark(cgen, "StubRoutines", "shenandoah_wb");
   address start = __ pc();
 
-  Label work;
-  __ mov(rscratch2, ShenandoahHeap::in_cset_fast_test_addr());
-  __ lsr(rscratch1, r0, ShenandoahHeapRegion::region_size_bytes_shift_jint());
-  __ ldrb(rscratch2, Address(rscratch2, rscratch1));
-  __ tbnz(rscratch2, 0, work);
-  __ ret(lr);
-  __ bind(work);
+  if (do_cset_test) {
+    Label work;
+    __ mov(rscratch2, ShenandoahHeap::in_cset_fast_test_addr());
+    __ lsr(rscratch1, r0, ShenandoahHeapRegion::region_size_bytes_shift_jint());
+    __ ldrb(rscratch2, Address(rscratch2, rscratch1));
+    __ tbnz(rscratch2, 0, work);
+    __ ret(lr);
+    __ bind(work);
+  }
 
   Register obj = r0;
 
   __ enter(); // required for proper stackwalking of RuntimeStub frame
 
-  __ push_call_clobbered_registers();
+  if (!c_abi) {
+    __ push_call_clobbered_registers();
+  } else {
+    __ push_call_clobbered_fp_registers();
+  }
 
   __ mov(lr, CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_barrier_JRT));
   __ blrt(lr, 1, 0, MacroAssembler::ret_type_integral);
-  __ mov(rscratch1, obj);
-  __ pop_call_clobbered_registers();
-  __ mov(obj, rscratch1);
+  if (!c_abi) {
+    __ mov(rscratch1, obj);
+    __ pop_call_clobbered_registers();
+    __ mov(obj, rscratch1);
+  } else {
+    __ pop_call_clobbered_fp_registers();
+  }
 
   __ leave(); // required for proper stackwalking of RuntimeStub frame
   __ ret(lr);
@@ -668,6 +684,7 @@ void ShenandoahBarrierSetAssembler::barrier_stubs_init() {
     BufferBlob* bb = BufferBlob::create("shenandoah_barrier_stubs", stub_code_size);
     CodeBuffer buf(bb);
     StubCodeGenerator cgen(&buf);
-    _shenandoah_wb = generate_shenandoah_wb(&cgen);
+    _shenandoah_wb = generate_shenandoah_wb(&cgen, false, true);
+    _shenandoah_wb_C = generate_shenandoah_wb(&cgen, true, false);
   }
 }
