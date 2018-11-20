@@ -910,6 +910,26 @@ Node* ShenandoahBarrierSetC2::step_over_gc_barrier(Node* c) const {
   return ShenandoahBarrierNode::skip_through_barrier(c);
 }
 
+bool ShenandoahBarrierSetC2::expand_barriers(Compile* C, PhaseIterGVN& igvn) const {
+  return !ShenandoahWriteBarrierNode::expand(C, igvn);
+}
+
+bool ShenandoahBarrierSetC2::optimize_loops(PhaseIdealLoop* phase, LoopOptsMode mode, VectorSet& visited, Node_Stack& nstack, Node_List& worklist) const {
+  if (mode == LoopOptsShenandoahExpand) {
+    assert(UseShenandoahGC, "only for shenandoah");
+    ShenandoahWriteBarrierNode::pin_and_expand(phase);
+    return true;
+  } else if (mode == LoopOptsShenandoahPostExpand) {
+    assert(UseShenandoahGC, "only for shenandoah");
+    visited.Clear();
+    ShenandoahWriteBarrierNode::optimize_after_expansion(visited, nstack, worklist, phase);
+    return true;
+  }
+  GrowableArray<MemoryGraphFixer*> memory_graph_fixers;
+  ShenandoahWriteBarrierNode::optimize_before_expansion(phase, memory_graph_fixers, false);
+  return false;
+}
+
 bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_coupled_alloc, BasicType type, bool is_clone, ArrayCopyPhase phase) const {
   bool is_oop = type == T_OBJECT || type == T_ARRAY;
   if (!is_oop) {

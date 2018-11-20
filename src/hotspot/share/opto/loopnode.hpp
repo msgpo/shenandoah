@@ -866,8 +866,8 @@ private:
 
   // Place Data nodes in some loop nest
   void build_loop_early( VectorSet &visited, Node_List &worklist, Node_Stack &nstack );
-  void build_loop_late(VectorSet &visited, Node_List &worklist, Node_Stack &nstack, bool verify_strip_mined);
-  void build_loop_late_post(Node* n, bool verify_strip_mined);
+  void build_loop_late ( VectorSet &visited, Node_List &worklist, Node_Stack &nstack );
+  void build_loop_late_post ( Node* n );
   void verify_strip_mined_scheduling(Node *n, Node* least);
 
   // Array of immediate dominance info for each CFG node indexed by node idx

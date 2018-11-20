@@ -166,7 +166,7 @@ public:
   virtual Node* Identity(PhaseGVN* phase);
   virtual bool depends_only_on_test() const { return false; }
 
-  static bool expand(Compile* C, PhaseIterGVN& igvn, int& loop_opts_cnt);
+  static bool expand(Compile* C, PhaseIterGVN& igvn);
   static bool is_gc_state_load(Node *n);
   static bool is_heap_state_test(Node* iff, int mask);
   static bool is_heap_stable_test(Node* iff);

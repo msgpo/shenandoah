@@ -40,10 +40,6 @@
 #include "opto/mulnode.hpp"
 #include "opto/rootnode.hpp"
 #include "opto/superword.hpp"
-#include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
-#endif
 
 //=============================================================================
 //------------------------------is_loop_iv-------------------------------------
@@ -1000,10 +996,10 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
         assert(found_sfpt, "no node in loop that's not input to safepoint");
       }
     }
+    CountedLoopEndNode* cle = inner_out->in(0)->as_CountedLoopEnd();
+    assert(cle == inner->loopexit_or_null(), "mismatch");
     bool has_skeleton = outer_le->in(1)->bottom_type()->singleton() && outer_le->in(1)->bottom_type()->is_int()->get_con() == 0;
     if (has_skeleton) {
-      CountedLoopEndNode* cle = inner_out->in(0)->as_CountedLoopEnd();
-      assert(cle == inner->loopexit_or_null(), "mismatch");
       assert(expect_skeleton == 1 || expect_skeleton == -1, "unexpected skeleton node");
       assert(outer->outcnt() == 2, "only phis");
     } else {
@@ -1019,32 +1015,12 @@ void LoopNode::verify_strip_mined(int expect_skeleton) const {
         Node* u = outer->fast_out(i);
         assert(u == outer || u == inner || u->is_Phi(), "nothing between inner and outer loop");
       }
-      Node* c = inner_out;
       uint stores = 0;
-      for (;;) {
-        for (DUIterator_Fast imax, i = c->fast_outs(imax); i < imax; i++) {
-          Node* u = c->fast_out(i);
-          if (u->is_Store()) {
-            stores++;
-          }
+      for (DUIterator_Fast imax, i = inner_out->fast_outs(imax); i < imax; i++) {
+        Node* u = inner_out->fast_out(i);
+        if (u->is_Store()) {
+          stores++;
         }
-        if (c->in(0)->is_CountedLoopEnd()) {
-          break;
-        }
-#if INCLUDE_SHENANDOAHGC
-        assert(UseShenandoahGC, "only for shenandoah barriers");
-        assert(c->is_Region() && c->req() == 3, "region that ends barrier");
-        uint j = 1;
-        uint req = c->req();
-        for (; j < req; j++) {
-          Node* in = c->in(j);
-          if (in->is_IfProj() && ShenandoahWriteBarrierNode::is_heap_stable_test(in->in(0))) {
-            c = in->in(0)->in(0);
-            break;
-          }
-        }
-        assert(j < req, "should have found heap stable test");
-#endif
       }
       assert(outer->outcnt() >= phis + 2 && outer->outcnt() <= phis + 2 + stores + 1, "only phis");
     }
@@ -2735,8 +2711,6 @@ bool PhaseIdealLoop::process_expensive_nodes() {
 void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
   bool do_split_ifs = (mode == LoopOptsDefault || mode == LoopOptsLastRound);
   bool skip_loop_opts = (mode == LoopOptsNone);
-  bool shenandoah_opts = (mode == LoopOptsShenandoahExpand ||
-                          mode == LoopOptsShenandoahPostExpand);
 
   ResourceMark rm;
 
@@ -2800,9 +2774,12 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
     return;
   }
 
+  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
   // Nothing to do, so get out
-  bool stop_early = !C->has_loops() && !skip_loop_opts && !do_split_ifs && !_verify_me && !_verify_only && !shenandoah_opts;
+  bool stop_early = !C->has_loops() && !skip_loop_opts && !do_split_ifs && !_verify_me && !_verify_only &&
+    !bs->is_gc_specific_loop_opts_pass(mode);
   bool do_expensive_nodes = C->should_optimize_expensive_nodes(_igvn);
+  bool strip_mined_loops_expanded = bs->strip_mined_loops_expanded(mode);
   if (stop_early && !do_expensive_nodes) {
     _igvn.optimize();           // Cleanup NeverBranches
     return;
@@ -2880,7 +2857,7 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
 
   // Given early legal placement, try finding counted loops.  This placement
   // is good enough to discover most loop invariants.
-  if (!_verify_me && !_verify_only && !shenandoah_opts) {
+  if (!_verify_me && !_verify_only && !strip_mined_loops_expanded) {
     _ltree_root->counted_loop(this);
   }
 
@@ -2891,7 +2868,7 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
   worklist.push( C->root() );
   NOT_PRODUCT( C->verify_graph_edges(); )
   worklist.push( C->top() );
-  build_loop_late(visited, worklist, nstack, !shenandoah_opts);
+  build_loop_late( visited, worklist, nstack );
 
   if (_verify_only) {
     // restore major progress flag
@@ -2938,25 +2915,6 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
   }
 #endif
 
-#if INCLUDE_SHENANDOAHGC
-  if (mode == LoopOptsShenandoahExpand) {
-    assert(UseShenandoahGC, "only for shenandoah");
-    ShenandoahWriteBarrierNode::pin_and_expand(this);
-  } else if (mode == LoopOptsShenandoahPostExpand) {
-    assert(UseShenandoahGC, "only for shenandoah");
-    visited.Clear();
-    ShenandoahWriteBarrierNode::optimize_after_expansion(visited, nstack, worklist, this);
-  }
-
-  if (shenandoah_opts) {
-    _igvn.optimize();
-    if (C->log() != NULL) {
-      log_loop_tree(_ltree_root, _ltree_root, C->log());
-    }
-    return;
-  }
-#endif
-
   if (skip_loop_opts) {
     // restore major progress flag
     for (int i = 0; i < old_progress; i++) {
@@ -2972,12 +2930,13 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
     return;
   }
 
-#if INCLUDE_SHENANDOAHGC
-  if (UseShenandoahGC) {
-    GrowableArray<MemoryGraphFixer*> memory_graph_fixers;
-    ShenandoahWriteBarrierNode::optimize_before_expansion(this, memory_graph_fixers, false);
+  if (bs->optimize_loops(this, mode, visited, nstack, worklist)) {
+    _igvn.optimize();
+    if (C->log() != NULL) {
+      log_loop_tree(_ltree_root, _ltree_root, C->log());
+    }
+    return;
   }
-#endif
 
   if (ReassociateInvariants) {
     // Reassociate invariants and prep for split_thru_phi
@@ -4137,7 +4096,7 @@ void PhaseIdealLoop::clear_dom_lca_tags() {
 //------------------------------build_loop_late--------------------------------
 // Put Data nodes into some loop nest, by setting the _nodes[]->loop mapping.
 // Second pass finds latest legal placement, and ideal loop placement.
-void PhaseIdealLoop::build_loop_late(VectorSet &visited, Node_List &worklist, Node_Stack &nstack, bool verify_strip_mined) {
+void PhaseIdealLoop::build_loop_late( VectorSet &visited, Node_List &worklist, Node_Stack &nstack ) {
   while (worklist.size() != 0) {
     Node *n = worklist.pop();
     // Only visit once
@@ -4173,7 +4132,7 @@ void PhaseIdealLoop::build_loop_late(VectorSet &visited, Node_List &worklist, No
         }
       } else {
         // All of n's children have been processed, complete post-processing.
-        build_loop_late_post(n, verify_strip_mined);
+        build_loop_late_post(n);
         if (nstack.is_empty()) {
           // Finished all nodes on stack.
           // Process next node on the worklist.
@@ -4198,7 +4157,8 @@ void PhaseIdealLoop::verify_strip_mined_scheduling(Node *n, Node* least) {
   }
   IdealLoopTree* loop = get_loop(least);
   Node* head = loop->_head;
-  if (head->is_OuterStripMinedLoop()) {
+  if (head->is_OuterStripMinedLoop() &&
+      head->as_Loop()->outer_loop_end()->in(1)->find_int_con(-1) == 0) {
     Node* sfpt = head->as_Loop()->outer_safepoint();
     ResourceMark rm;
     Unique_Node_List wq;
@@ -4224,7 +4184,7 @@ void PhaseIdealLoop::verify_strip_mined_scheduling(Node *n, Node* least) {
 //------------------------------build_loop_late_post---------------------------
 // Put Data nodes into some loop nest, by setting the _nodes[]->loop mapping.
 // Second pass finds latest legal placement, and ideal loop placement.
-void PhaseIdealLoop::build_loop_late_post(Node *n, bool verify_strip_mined) {
+void PhaseIdealLoop::build_loop_late_post( Node *n ) {
 
   if (n->req() == 2 && (n->Opcode() == Op_ConvI2L || n->Opcode() == Op_CastII) && !C->major_progress() && !_verify_only) {
     _igvn._worklist.push(n);  // Maybe we'll normalize it, if no more loops.
@@ -4386,9 +4346,7 @@ void PhaseIdealLoop::build_loop_late_post(Node *n, bool verify_strip_mined) {
 
   // Assign discovered "here or above" point
   least = find_non_split_ctrl(least);
-  if (verify_strip_mined && !_verify_only) {
-    verify_strip_mined_scheduling(n, least);
-  }
+  verify_strip_mined_scheduling(n, least);
   set_ctrl(n, least);
 
   // Collect inner loop bodies

@@ -395,7 +395,7 @@ Node* ShenandoahWriteBarrierNode::Ideal(PhaseGVN *phase, bool can_reshape) {
   return NULL;
 }
 
-bool ShenandoahWriteBarrierNode::expand(Compile* C, PhaseIterGVN& igvn, int& loop_opts_cnt) {
+bool ShenandoahWriteBarrierNode::expand(Compile* C, PhaseIterGVN& igvn) {
   if (UseShenandoahGC) {
     if (ShenandoahBarrierSetC2::bsc2()->state()->shenandoah_barriers_count() > 0 || (!ShenandoahWriteBarrier && ShenandoahStoreValEnqueueBarrier)) {
       bool attempt_more_loopopts = ShenandoahLoopOptsAfterExpansion;
@@ -406,7 +406,7 @@ bool ShenandoahWriteBarrierNode::expand(Compile* C, PhaseIterGVN& igvn, int& loo
       DEBUG_ONLY(ShenandoahBarrierNode::verify_raw_mem(C->root());)
       if (attempt_more_loopopts) {
         C->set_major_progress();
-        if (!C->optimize_loops(loop_opts_cnt, igvn, LoopOptsShenandoahPostExpand)) {
+        if (!C->optimize_loops(igvn, LoopOptsShenandoahPostExpand)) {
           return false;
         }
         C->clear_major_progress();
@@ -754,7 +754,8 @@ bool ShenandoahBarrierNode::verify_helper(Node* in, Node_Stack& phis, VectorSet&
         if (trace) {tty->print("Found barrier"); in->dump();}
       } else if (in->Opcode() == Op_ShenandoahEnqueueBarrier) {
         if (t != ShenandoahOopStore) {
-          return false;
+          in = in->in(1);
+          continue;
         }
         if (trace) {tty->print("Found enqueue barrier"); in->dump();}
         phis.push(in, in->req());
@@ -2266,6 +2267,17 @@ void ShenandoahWriteBarrierNode::follow_barrier_uses(Node* n, Node* ctrl, Unique
   }
 }
 
+static void hide_strip_mined_loop(OuterStripMinedLoopNode* outer, CountedLoopNode* inner, PhaseIdealLoop* phase) {
+  OuterStripMinedLoopEndNode* le = inner->outer_loop_end();
+  Node* new_outer = new LoopNode(outer->in(LoopNode::EntryControl), outer->in(LoopNode::LoopBackControl));
+  phase->register_control(new_outer, phase->get_loop(outer), outer->in(LoopNode::EntryControl));
+  Node* new_le = new IfNode(le->in(0), le->in(1), le->_prob, le->_fcnt);
+  phase->register_control(new_le, phase->get_loop(le), le->in(0));
+  phase->lazy_replace(outer, new_outer);
+  phase->lazy_replace(le, new_le);
+  inner->clear_strip_mined();
+}
+
 void ShenandoahWriteBarrierNode::test_heap_stable(Node*& ctrl, Node* raw_mem, Node*& heap_stable_ctrl,
                                                   PhaseIdealLoop* phase) {
   IdealLoopTree* loop = phase->get_loop(ctrl);
@@ -2556,6 +2568,7 @@ void ShenandoahWriteBarrierNode::pin_and_expand(PhaseIdealLoop* phase) {
 
   MemoryGraphFixer fixer(Compile::AliasIdxRaw, true, phase);
   Unique_Node_List uses_to_ignore;
+  Unique_Node_List outer_lsms;
   for (uint i = 0; i < enqueue_barriers.size(); i++) {
     Node* barrier = enqueue_barriers.at(i);
     Node* pre_val = barrier->in(1);
@@ -2579,6 +2592,9 @@ void ShenandoahWriteBarrierNode::pin_and_expand(PhaseIdealLoop* phase) {
 
     Node* init_ctrl = ctrl;
     IdealLoopTree* loop = phase->get_loop(ctrl);
+    if (loop->_head->is_OuterStripMinedLoop()) {
+      outer_lsms.push(loop->_head);
+    }
     Node* raw_mem = fixer.find_mem(ctrl, barrier);
     Node* init_raw_mem = raw_mem;
     Node* raw_mem_for_ctrl = fixer.find_mem(ctrl, NULL);
@@ -2723,6 +2739,9 @@ void ShenandoahWriteBarrierNode::pin_and_expand(PhaseIdealLoop* phase) {
     Node* val = wb->in(ValueIn);
     Node* wbproj = wb->find_out_with(Op_ShenandoahWBMemProj);
     IdealLoopTree *loop = phase->get_loop(ctrl);
+    if (loop->_head->is_OuterStripMinedLoop()) {
+      outer_lsms.push(loop->_head);
+    }
 
     assert(val->Opcode() != Op_ShenandoahWriteBarrier, "No chain of write barriers");
 
@@ -2907,6 +2926,14 @@ void ShenandoahWriteBarrierNode::pin_and_expand(PhaseIdealLoop* phase) {
   }
 
   assert(ShenandoahBarrierSetC2::bsc2()->state()->shenandoah_barriers_count() == 0, "all write barrier nodes should have been replaced");
+
+  for (uint i = 0; i < outer_lsms.size(); i++) {
+    // Expanding a barrier here will break loop strip mining
+    // verification. Transform the loop so the loop nest doesn't
+    // appear as strip mined.
+    OuterStripMinedLoopNode* outer = outer_lsms.at(i)->as_OuterStripMinedLoop();
+    hide_strip_mined_loop(outer, outer->unique_ctrl_out()->as_CountedLoop(), phase);
+  }
 }
 
 void ShenandoahWriteBarrierNode::move_heap_stable_test_out_of_loop(IfNode* iff, PhaseIdealLoop* phase) {
@@ -3122,14 +3149,7 @@ void ShenandoahWriteBarrierNode::optimize_after_expansion(VectorSet &visited, No
             if (loop->policy_unswitching(phase)) {
               if (head->is_strip_mined()) {
                 OuterStripMinedLoopNode* outer = head->as_CountedLoop()->outer_loop();
-                OuterStripMinedLoopEndNode* le = head->outer_loop_end();
-                Node* new_outer = new LoopNode(outer->in(LoopNode::EntryControl), outer->in(LoopNode::LoopBackControl));
-                phase->register_control(new_outer, phase->get_loop(outer), outer->in(LoopNode::EntryControl));
-                Node* new_le = new IfNode(le->in(0), le->in(1), le->_prob, le->_fcnt);
-                phase->register_control(new_le, phase->get_loop(le), le->in(0));
-                phase->lazy_replace(outer, new_outer);
-                phase->lazy_replace(le, new_le);
-                head->clear_strip_mined();
+                hide_strip_mined_loop(outer, head->as_CountedLoop(), phase);
               }
               phase->do_unswitching(loop, old_new);
             } else {
