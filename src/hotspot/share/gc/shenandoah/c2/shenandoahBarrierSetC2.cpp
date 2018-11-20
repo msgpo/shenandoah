@@ -32,6 +32,7 @@
 #include "opto/graphKit.hpp"
 #include "opto/idealKit.hpp"
 #include "opto/macro.hpp"
+#include "opto/movenode.hpp"
 #include "opto/narrowptrnode.hpp"
 #include "opto/rootnode.hpp"
 
@@ -1416,4 +1417,48 @@ bool ShenandoahBarrierSetC2::escape_has_out_with_unsafe_object(Node* n) const {
 
 bool ShenandoahBarrierSetC2::escape_is_barrier_node(Node* n) const {
   return n->is_ShenandoahBarrier();
+}
+
+bool ShenandoahBarrierSetC2::matcher_find_shared_visit(Matcher* matcher, Matcher::MStack& mstack, Node* n, uint opcode, bool& mem_op, int& mem_addr_idx) const {
+  switch (opcode) {
+    case Op_ShenandoahReadBarrier:
+      if (n->in(ShenandoahBarrierNode::ValueIn)->is_DecodeNarrowPtr()) {
+        matcher->set_shared(n->in(ShenandoahBarrierNode::ValueIn)->in(1));
+      }
+      matcher->set_shared(n);
+      return true;
+    default:
+      break;
+  }
+  return false;
+}
+
+bool ShenandoahBarrierSetC2::matcher_find_shared_post_visit(Matcher* matcher, Node* n, uint opcode) const {
+  switch (opcode) {
+    case Op_ShenandoahCompareAndExchangeP:
+    case Op_ShenandoahCompareAndExchangeN:
+    case Op_ShenandoahWeakCompareAndSwapP:
+    case Op_ShenandoahWeakCompareAndSwapN:
+    case Op_ShenandoahCompareAndSwapP:
+    case Op_ShenandoahCompareAndSwapN: {   // Convert trinary to binary-tree
+      Node* newval = n->in(MemNode::ValueIn);
+      Node* oldval = n->in(LoadStoreConditionalNode::ExpectedIn);
+      Node* pair = new BinaryNode(oldval, newval);
+      n->set_req(MemNode::ValueIn,pair);
+      n->del_req(LoadStoreConditionalNode::ExpectedIn);
+      return true;
+    }
+    default:
+      break;
+  }
+  return false;
+}
+
+bool ShenandoahBarrierSetC2::matcher_is_store_load_barrier(Node* x, uint xop) const {
+  return xop == Op_ShenandoahCompareAndExchangeP ||
+         xop == Op_ShenandoahCompareAndExchangeN ||
+         xop == Op_ShenandoahWeakCompareAndSwapP ||
+         xop == Op_ShenandoahWeakCompareAndSwapN ||
+         xop == Op_ShenandoahCompareAndSwapN ||
+         xop == Op_ShenandoahCompareAndSwapP;
 }
