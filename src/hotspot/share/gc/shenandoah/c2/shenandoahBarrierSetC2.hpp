@@ -92,6 +92,7 @@ public:
   static ShenandoahBarrierSetC2* bsc2();
 
   static bool is_shenandoah_wb_pre_call(Node* call);
+  static bool is_shenandoah_wb_call(Node* call);
   static bool is_shenandoah_marking_if(PhaseTransform *phase, Node* n);
   static bool is_shenandoah_state_load(Node* n);
   static bool has_only_shenandoah_wb_pre_uses(Node* n);

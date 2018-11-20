@@ -359,6 +359,11 @@ bool ShenandoahBarrierSetC2::is_shenandoah_wb_pre_call(Node* call) {
          call->as_CallLeaf()->entry_point() == CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_ref_field_pre_entry);
 }
 
+bool ShenandoahBarrierSetC2::is_shenandoah_wb_call(Node* call) {
+  return call->is_CallLeaf() &&
+         call->as_CallLeaf()->entry_point() == CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_barrier_JRT);
+}
+
 bool ShenandoahBarrierSetC2::is_shenandoah_marking_if(PhaseTransform *phase, Node* n) {
   if (n->Opcode() != Op_If) {
     return false;
