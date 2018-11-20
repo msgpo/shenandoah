@@ -1682,9 +1682,12 @@ void PhaseIterGVN::add_users_to_worklist( Node *n ) {
     }
 
     if (use->is_ShenandoahBarrier()) {
-      Node* cmp = use->find_out_with(Op_CmpP);
-      if (cmp != NULL) {
-        _worklist.push(cmp);
+      for (DUIterator_Fast i2max, i2 = use->fast_outs(i2max); i2 < i2max; i2++) {
+        Node* u = use->fast_out(i2);
+        Node* cmp = use->find_out_with(Op_CmpP);
+        if (u->Opcode() == Op_CmpP) {
+          _worklist.push(cmp);
+        }
       }
     }
   }
@@ -1848,11 +1851,7 @@ void PhaseCCP::analyze() {
         if (m->is_ShenandoahBarrier()) {
           for (DUIterator_Fast i2max, i2 = m->fast_outs(i2max); i2 < i2max; i2++) {
             Node* p = m->fast_out(i2);
-            if (p->Opcode() == Op_CmpP) {
-              if(p->bottom_type() != type(p)) {
-                worklist.push(p);
-              }
-            } else if (p->Opcode() == Op_AddP) {
+            if (p->Opcode() == Op_AddP) {
               for (DUIterator_Fast i3max, i3 = p->fast_outs(i3max); i3 < i3max; i3++) {
                 Node* q = p->fast_out(i3);
                 if (q->is_Load()) {
