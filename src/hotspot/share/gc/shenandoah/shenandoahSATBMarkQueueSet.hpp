@@ -38,11 +38,12 @@ public:
 class ShenandoahSATBMarkQueueSet : public SATBMarkQueueSet {
 private:
   ShenandoahHeap* _heap;
+  BufferNode::Allocator _satb_mark_queue_buffer_allocator;
 public:
   ShenandoahSATBMarkQueueSet();
 
   void initialize(ShenandoahHeap* const heap,
-                  Monitor* cbl_mon, Mutex* fl_lock,
+                  Monitor* cbl_mon,
                   int process_completed_threshold,
                   uint buffer_enqueue_threshold_percentage,
                   Mutex* lock);

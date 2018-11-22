@@ -27,14 +27,18 @@
 #include "gc/shenandoah/shenandoahSATBMarkQueueSet.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 
-ShenandoahSATBMarkQueueSet::ShenandoahSATBMarkQueueSet() : _heap(NULL) {}
+ShenandoahSATBMarkQueueSet::ShenandoahSATBMarkQueueSet() :
+  _heap(NULL),
+  _satb_mark_queue_buffer_allocator(ShenandoahSATBBufferSize, SATB_Q_FL_lock)
+{}
 
 void ShenandoahSATBMarkQueueSet::initialize(ShenandoahHeap* const heap,
-                                            Monitor* cbl_mon, Mutex* fl_lock,
+                                            Monitor* cbl_mon,
                                             int process_completed_threshold,
                                             uint buffer_enqueue_threshold_percentage,
                                             Mutex* lock) {
-  SATBMarkQueueSet::initialize(cbl_mon, fl_lock,
+  SATBMarkQueueSet::initialize(cbl_mon,
+                               &_satb_mark_queue_buffer_allocator,
                                process_completed_threshold,
                                buffer_enqueue_threshold_percentage,
                                lock);

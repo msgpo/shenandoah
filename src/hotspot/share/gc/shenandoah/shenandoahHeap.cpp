@@ -176,13 +176,10 @@ jint ShenandoahHeap::initialize() {
   assert((((size_t) base()) & ShenandoahHeapRegion::region_size_bytes_mask()) == 0,
          "misaligned heap: " PTR_FORMAT, p2i(base()));
 
-  ShenandoahBarrierSet::satb_mark_queue_set().set_buffer_size(ShenandoahSATBBufferSize);
-
   // The call below uses stuff (the SATB* things) that are in G1, but probably
   // belong into a shared location.
   ShenandoahBarrierSet::satb_mark_queue_set().initialize(this,
                                                SATB_Q_CBL_mon,
-                                               SATB_Q_FL_lock,
                                                20 /*G1SATBProcessCompletedThreshold */,
                                                60 /* G1SATBBufferEnqueueingThresholdPercent */,
                                                Shared_SATB_Q_lock);
