@@ -159,6 +159,9 @@ public:
   virtual bool matcher_find_shared_visit(Matcher* matcher, Matcher::MStack& mstack, Node* n, uint opcode, bool& mem_op, int& mem_addr_idx) const;
   virtual bool matcher_find_shared_post_visit(Matcher* matcher, Node* n, uint opcode) const;
   virtual bool matcher_is_store_load_barrier(Node* x, uint xop) const;
+
+  virtual void igvn_add_users_to_worklist(PhaseIterGVN* igvn, Node* use) const;
+  virtual void ccp_analyze(PhaseCCP* ccp, Unique_Node_List& worklist, Node* use) const;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP

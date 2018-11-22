@@ -1462,3 +1462,33 @@ bool ShenandoahBarrierSetC2::matcher_is_store_load_barrier(Node* x, uint xop) co
          xop == Op_ShenandoahCompareAndSwapN ||
          xop == Op_ShenandoahCompareAndSwapP;
 }
+
+void ShenandoahBarrierSetC2::igvn_add_users_to_worklist(PhaseIterGVN* igvn, Node* use) const {
+  if (use->is_ShenandoahBarrier()) {
+    for (DUIterator_Fast i2max, i2 = use->fast_outs(i2max); i2 < i2max; i2++) {
+      Node* u = use->fast_out(i2);
+      Node* cmp = use->find_out_with(Op_CmpP);
+      if (u->Opcode() == Op_CmpP) {
+        igvn->_worklist.push(cmp);
+      }
+    }
+  }
+}
+
+void ShenandoahBarrierSetC2::ccp_analyze(PhaseCCP* ccp, Unique_Node_List& worklist, Node* use) const {
+  if (use->is_ShenandoahBarrier()) {
+    for (DUIterator_Fast i2max, i2 = use->fast_outs(i2max); i2 < i2max; i2++) {
+      Node* p = use->fast_out(i2);
+      if (p->Opcode() == Op_AddP) {
+        for (DUIterator_Fast i3max, i3 = p->fast_outs(i3max); i3 < i3max; i3++) {
+          Node* q = p->fast_out(i3);
+          if (q->is_Load()) {
+            if(q->bottom_type() != ccp->type(q)) {
+              worklist.push(q);
+            }
+          }
+        }
+      }
+    }
+  }
+}

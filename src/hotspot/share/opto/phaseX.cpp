@@ -39,9 +39,6 @@
 #include "opto/regalloc.hpp"
 #include "opto/rootnode.hpp"
 #include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
-#endif
 
 //=============================================================================
 #define NODE_HASH_MINIMUM_SIZE    255
@@ -1681,15 +1678,7 @@ void PhaseIterGVN::add_users_to_worklist( Node *n ) {
       }
     }
 
-    if (use->is_ShenandoahBarrier()) {
-      for (DUIterator_Fast i2max, i2 = use->fast_outs(i2max); i2 < i2max; i2++) {
-        Node* u = use->fast_out(i2);
-        Node* cmp = use->find_out_with(Op_CmpP);
-        if (u->Opcode() == Op_CmpP) {
-          _worklist.push(cmp);
-        }
-      }
-    }
+    BarrierSet::barrier_set()->barrier_set_c2()->igvn_add_users_to_worklist(this, use);
   }
 }
 
@@ -1840,7 +1829,7 @@ void PhaseCCP::analyze() {
                 for (DUIterator_Fast i3max, i3 = u->fast_outs(i3max); i3 < i3max; i3++) {
                   Node* b = u->fast_out(i3);
                   if (bs->is_gc_barrier_node(b)) {
-                    _worklist.push(b);
+                    worklist.push(b);
                   }
                 }
               }
@@ -1848,21 +1837,8 @@ void PhaseCCP::analyze() {
             }
           }
         }
-        if (m->is_ShenandoahBarrier()) {
-          for (DUIterator_Fast i2max, i2 = m->fast_outs(i2max); i2 < i2max; i2++) {
-            Node* p = m->fast_out(i2);
-            if (p->Opcode() == Op_AddP) {
-              for (DUIterator_Fast i3max, i3 = p->fast_outs(i3max); i3 < i3max; i3++) {
-                Node* q = p->fast_out(i3);
-                if (q->is_Load()) {
-                  if(q->bottom_type() != type(q)) {
-                    worklist.push(q);
-                  }
-                }
-              }
-            }
-          }
-        }
+
+        BarrierSet::barrier_set()->barrier_set_c2()->ccp_analyze(this, worklist, m);
       }
     }
   }
