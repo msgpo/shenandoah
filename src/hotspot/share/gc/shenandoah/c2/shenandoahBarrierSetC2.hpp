@@ -162,6 +162,8 @@ public:
 
   virtual void igvn_add_users_to_worklist(PhaseIterGVN* igvn, Node* use) const;
   virtual void ccp_analyze(PhaseCCP* ccp, Unique_Node_List& worklist, Node* use) const;
+
+  virtual bool has_special_unique_user(const Node* node) const;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP

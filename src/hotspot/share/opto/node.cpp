@@ -40,9 +40,6 @@
 #include "opto/type.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
-#if INCLUDE_SHENANDOAHGC
-#include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
-#endif
 
 class RegMask;
 // #include "phase.hpp"
@@ -1145,12 +1142,9 @@ bool Node::has_special_unique_user() const {
   } else if (is_If() && (n->is_IfFalse() || n->is_IfTrue())) {
     // See IfProjNode::Identity()
     return true;
-#if INCLUDE_SHENANDOAHGC
-  } else if (op == Op_ShenandoahWriteBarrier) {
-    return n->Opcode() == Op_ShenandoahWBMemProj;
-#endif
+  } else {
+    return BarrierSet::barrier_set()->barrier_set_c2()->has_special_unique_user(this);
   }
-  return false;
 };
 
 //--------------------------find_exact_control---------------------------------

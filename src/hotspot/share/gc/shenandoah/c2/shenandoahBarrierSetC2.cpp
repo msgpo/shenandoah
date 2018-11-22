@@ -1058,6 +1058,12 @@ void ShenandoahBarrierSetC2::eliminate_useless_gc_barriers(Unique_Node_List &use
 
 }
 
+bool ShenandoahBarrierSetC2::has_special_unique_user(const Node* node) const {
+  assert(node->outcnt() == 1, "match only for unique out");
+  Node* n = node->unique_out();
+  return node->Opcode() == Op_ShenandoahWriteBarrier && n->Opcode() == Op_ShenandoahWBMemProj;
+}
+
 void ShenandoahBarrierSetC2::add_users_to_worklist(Unique_Node_List* worklist) const {}
 
 void* ShenandoahBarrierSetC2::create_barrier_state(Arena* comp_arena) const {
