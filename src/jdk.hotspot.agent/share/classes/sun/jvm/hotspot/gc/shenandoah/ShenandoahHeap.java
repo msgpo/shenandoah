@@ -77,6 +77,7 @@ public class ShenandoahHeap extends CollectedHeap {
     public long committed() {
         return committedRegions.getValue(addr);
     }
+
     public void heapRegionIterate(sun.jvm.hotspot.gc.shared.SpaceClosure scl) {
         int numRgns = (int)numRegions.getValue(addr);
         for (int index = 0; index < numRgns; index ++) {
@@ -89,12 +90,9 @@ public class ShenandoahHeap extends CollectedHeap {
         }
     }
 
-    public int oop_extra_words() {
-        return 1;
-    }
-
-    public int oop_region_offset_words() {
-        return 1;
+    @Override
+    public int cell_header_size() {
+        return VM.getVM().getHeapWordSize();
     }
 
     @Override

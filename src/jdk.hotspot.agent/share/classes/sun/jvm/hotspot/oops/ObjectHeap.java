@@ -246,9 +246,7 @@ public class ObjectHeap {
       }
     }
 
-    // Offset of the first oop from region's bottom
-    int oop_offset = heap.oop_region_offset_words() * VM.getVM().getHeapWordSize();
-    int oop_extra_size = heap.oop_extra_words() * VM.getVM().getHeapWordSize();
+    int cell_header_size = heap.cell_header_size();
 
     for (int i = 0; i < liveRegions.size(); i += 2) {
       Address bottom = (Address) liveRegions.get(i);
@@ -256,7 +254,7 @@ public class ObjectHeap {
 
       try {
         // Traverses the space from bottom to top
-        OopHandle handle = bottom.addOffsetToAsOopHandle(oop_offset);
+        OopHandle handle = bottom.addOffsetToAsOopHandle(cell_header_size);
 
         while (handle.lessThan(top)) {
         Oop obj = null;
@@ -293,7 +291,7 @@ public class ObjectHeap {
           if ( (cmsSpaceOld != null) && cmsSpaceOld.contains(handle)) {
               handle = handle.addOffsetToAsOopHandle(CompactibleFreeListSpace.adjustObjectSizeInBytes(obj.getObjectSize()) );
           } else {
-              handle = handle.addOffsetToAsOopHandle(obj.getObjectSize() + oop_extra_size);
+              handle = handle.addOffsetToAsOopHandle(obj.getObjectSize() + cell_header_size);
           }
         }
       }
