@@ -103,7 +103,7 @@ public:
   bool obj_equals(oop obj1, oop obj2);
 
 #ifdef CHECK_UNHANDLED_OOPS
-  bool oop_equals_operator_allowed() { return !VerifyObjectEquals; }
+  bool oop_equals_operator_allowed() { return !ShenandoahVerifyObjectEquals; }
 #endif
 
   void enqueue(oop obj);
