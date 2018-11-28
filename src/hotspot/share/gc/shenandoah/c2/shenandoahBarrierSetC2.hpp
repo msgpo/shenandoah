@@ -168,6 +168,7 @@ public:
   virtual void ccp_analyze(PhaseCCP* ccp, Unique_Node_List& worklist, Node* use) const;
 
   virtual bool has_special_unique_user(const Node* node) const;
+  virtual Node* split_if_pre(PhaseIdealLoop* phase, Node* n) const;
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_C2_SHENANDOAHBARRIERSETC2_HPP

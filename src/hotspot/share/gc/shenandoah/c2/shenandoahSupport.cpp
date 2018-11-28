@@ -1902,7 +1902,71 @@ void ShenandoahWriteBarrierNode::optimize_before_expansion(PhaseIdealLoop* phase
   } while(progress);
 }
 
-void ShenandoahReadBarrierNode::try_move(Node *n_ctrl, PhaseIdealLoop* phase) {
+// Some code duplication with PhaseIdealLoop::split_if_with_blocks_pre()
+Node* ShenandoahWriteBarrierNode::try_split_thru_phi(PhaseIdealLoop* phase) {
+  Node *ctrl = phase->get_ctrl(this);
+  if (ctrl == NULL) {
+    return this;
+  }
+  Node *blk = phase->has_local_phi_input(this);
+  if (blk == NULL) {
+    return this;
+  }
+
+  if (in(0) != blk) {
+    return this;
+  }
+
+  int policy = blk->req() >> 2;
+
+  if (blk->is_CountedLoop()) {
+    IdealLoopTree *lp = phase->get_loop(blk);
+    if (lp && lp->_rce_candidate) {
+      return this;
+    }
+  }
+
+  if (phase->C->live_nodes() > 35000) {
+    return this;
+  }
+
+  uint unique = phase->C->unique();
+  Node *phi = phase->split_thru_phi(this, blk, policy);
+  if (phi == NULL) {
+    return this;
+  }
+
+  Node* mem_phi = new PhiNode(blk, Type::MEMORY, phase->C->alias_type(adr_type())->adr_type());
+  for (uint i = 1; i < blk->req(); i++) {
+    Node* n = phi->in(i);
+    if (n->Opcode() == Op_ShenandoahWriteBarrier &&
+        n->_idx >= unique) {
+      Node* proj = new ShenandoahWBMemProjNode(n);
+      phase->register_new_node(proj, phase->get_ctrl(n));
+      mem_phi->init_req(i, proj);
+    } else {
+      Node* mem = in(ShenandoahBarrierNode::Memory);
+      if (mem->is_Phi() && mem->in(0) == blk) {
+        mem = mem->in(i);
+      }
+      mem_phi->init_req(i, mem);
+    }
+  }
+  phase->register_new_node(mem_phi, blk);
+
+
+  Node* proj = find_out_with(Op_ShenandoahWBMemProj);
+  phase->igvn().replace_node(proj, mem_phi);
+  phase->igvn().replace_node(this, phi);
+
+  return phi;
+}
+
+void ShenandoahReadBarrierNode::try_move(PhaseIdealLoop* phase) {
+  Node *n_ctrl = phase->get_ctrl(this);
+  if (n_ctrl == NULL) {
+    return;
+  }
   Node* mem = in(MemNode::Memory);
   int alias = phase->C->get_alias_index(adr_type());
   const bool trace = false;

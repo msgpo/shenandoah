@@ -149,7 +149,7 @@ public:
 
   bool is_independent(Node* mem);
 
-  void try_move(Node *n_ctrl, PhaseIdealLoop* phase);
+  void try_move(PhaseIdealLoop* phase);
 
 private:
   static bool is_independent(const Type* in_type, const Type* this_type);
@@ -208,6 +208,8 @@ public:
   static void optimize_before_expansion(PhaseIdealLoop* phase, GrowableArray<MemoryGraphFixer*> memory_graph_fixers, bool include_lsm);
   Node* would_subsume(ShenandoahBarrierNode* other, PhaseIdealLoop* phase);
   static IfNode* find_unswitching_candidate(const IdealLoopTree *loop, PhaseIdealLoop* phase);
+
+  Node* try_split_thru_phi(PhaseIdealLoop* phase);
 };
 
 class ShenandoahWBMemProjNode : public Node {

@@ -1518,3 +1518,13 @@ void ShenandoahBarrierSetC2::ccp_analyze(PhaseCCP* ccp, Unique_Node_List& workli
     }
   }
 }
+
+Node* ShenandoahBarrierSetC2::split_if_pre(PhaseIdealLoop* phase, Node* n) const {
+  if (n->Opcode() == Op_ShenandoahReadBarrier) {
+    ((ShenandoahReadBarrierNode*)n)->try_move(phase);
+  } else if (n->Opcode() == Op_ShenandoahWriteBarrier) {
+    return ((ShenandoahWriteBarrierNode*)n)->try_split_thru_phi(phase);
+  }
+
+  return NULL;
+}
