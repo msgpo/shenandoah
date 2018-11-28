@@ -74,7 +74,7 @@ ShenandoahBarrierSet::ShenandoahBarrierSet(ShenandoahHeap* heap) :
              make_barrier_set_c1<ShenandoahBarrierSetC1>(),
              make_barrier_set_c2<ShenandoahBarrierSetC2>(),
              NULL /* barrier_set_nmethod */,
-             BarrierSet::FakeRtti(BarrierSet::Shenandoah)),
+             BarrierSet::FakeRtti(BarrierSet::ShenandoahBarrierSet)),
   _heap(heap),
   _satb_mark_queue_set()
 {
@@ -90,7 +90,7 @@ void ShenandoahBarrierSet::print_on(outputStream* st) const {
 }
 
 bool ShenandoahBarrierSet::is_a(BarrierSet::Name bsn) {
-  return bsn == BarrierSet::Shenandoah;
+  return bsn == BarrierSet::ShenandoahBarrierSet;
 }
 
 bool ShenandoahBarrierSet::is_aligned(HeapWord* hw) {
