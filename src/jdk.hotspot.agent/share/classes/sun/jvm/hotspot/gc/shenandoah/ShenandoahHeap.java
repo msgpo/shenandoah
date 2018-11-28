@@ -91,11 +91,6 @@ public class ShenandoahHeap extends CollectedHeap {
     }
 
     @Override
-    public int cell_header_size() {
-        return VM.getVM().getHeapWordSize();
-    }
-
-    @Override
     public void printOn(PrintStream tty) {
         MemRegion mr = reservedRegion();
         tty.print("Shenandoah heap");
