@@ -4243,7 +4243,6 @@ void PhaseIdealLoop::build_loop_late_post( Node *n ) {
     case Op_HasNegatives:
       pinned = false;
     }
-
     if( pinned ) {
       IdealLoopTree *chosen_loop = get_loop(n->is_CFG() ? n : get_ctrl(n));
       if( !chosen_loop->_child )       // Inner loop?
