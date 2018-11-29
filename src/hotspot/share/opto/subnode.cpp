@@ -883,7 +883,7 @@ static inline Node* isa_java_mirror_load(PhaseGVN* phase, Node* n) {
   //   LoadBarrier?(LoadP(LoadP(AddP(foo:Klass, #java_mirror))))
   //   or NULL if not matching.
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
-  n = bs->step_over_gc_barrier(n);
+    n = bs->step_over_gc_barrier(n);
 
   if (n->Opcode() != Op_LoadP) return NULL;
 
