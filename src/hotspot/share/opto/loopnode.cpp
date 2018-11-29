@@ -2858,7 +2858,7 @@ void PhaseIdealLoop::build_and_optimize(LoopOptsMode mode) {
   // Given early legal placement, try finding counted loops.  This placement
   // is good enough to discover most loop invariants.
   if (!_verify_me && !_verify_only && !strip_mined_loops_expanded) {
-    _ltree_root->counted_loop(this);
+    _ltree_root->counted_loop( this );
   }
 
   // Find latest loop placement.  Find ideal loop placement.
@@ -4158,6 +4158,7 @@ void PhaseIdealLoop::verify_strip_mined_scheduling(Node *n, Node* least) {
   IdealLoopTree* loop = get_loop(least);
   Node* head = loop->_head;
   if (head->is_OuterStripMinedLoop() &&
+      // Verification can't be applied to fully built strip mined loops
       head->as_Loop()->outer_loop_end()->in(1)->find_int_con(-1) == 0) {
     Node* sfpt = head->as_Loop()->outer_safepoint();
     ResourceMark rm;

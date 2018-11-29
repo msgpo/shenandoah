@@ -278,7 +278,6 @@ public:
   // Allow barrier sets to have shared state that is preserved across a compilation unit.
   // This could for example comprise macro nodes to be expanded during macro expansion.
   virtual void* create_barrier_state(Arena* comp_arena) const { return NULL; }
-
   // If the BarrierSetC2 state has barrier nodes in its compilation
   // unit state to be expanded later, then now is the time to do so.
   virtual bool expand_barriers(Compile* C, PhaseIterGVN& igvn) const { return false; }
