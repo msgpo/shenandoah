@@ -4185,7 +4185,17 @@ void PhaseIdealLoop::verify_strip_mined_scheduling(Node *n, Node* least) {
 //------------------------------build_loop_late_post---------------------------
 // Put Data nodes into some loop nest, by setting the _nodes[]->loop mapping.
 // Second pass finds latest legal placement, and ideal loop placement.
-void PhaseIdealLoop::build_loop_late_post( Node *n ) {
+void PhaseIdealLoop::build_loop_late_post(Node *n) {
+  BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
+
+  if (bs->build_loop_late_post(this, n)) {
+    return;
+  }
+
+  build_loop_late_post_work(n, true);
+}
+
+void PhaseIdealLoop::build_loop_late_post_work(Node *n, bool pinned) {
 
   if (n->req() == 2 && (n->Opcode() == Op_ConvI2L || n->Opcode() == Op_CastII) && !C->major_progress() && !_verify_only) {
     _igvn._worklist.push(n);  // Maybe we'll normalize it, if no more loops.
@@ -4206,7 +4216,6 @@ void PhaseIdealLoop::build_loop_late_post( Node *n ) {
     // _must_ be pinned (they have to observe their control edge of course).
     // Unlike Stores (which modify an unallocable resource, the memory
     // state), Mods/Loads can float around.  So free them up.
-    bool pinned = true;
     switch( n->Opcode() ) {
     case Op_DivI:
     case Op_DivF:
@@ -4236,11 +4245,6 @@ void PhaseIdealLoop::build_loop_late_post( Node *n ) {
     case Op_StrIndexOf:
     case Op_StrIndexOfChar:
     case Op_AryEq:
-#if INCLUDE_SHENANDOAHGC
-    case Op_ShenandoahReadBarrier:
-    case Op_ShenandoahWriteBarrier:
-    case Op_ShenandoahWBMemProj:
-#endif
     case Op_HasNegatives:
       pinned = false;
     }
@@ -4353,16 +4357,6 @@ void PhaseIdealLoop::build_loop_late_post( Node *n ) {
   IdealLoopTree *chosen_loop = get_loop(least);
   if( !chosen_loop->_child )   // Inner loop?
     chosen_loop->_body.push(n);// Collect inner loops
-
-  if (n->Opcode() == Op_ShenandoahWriteBarrier) {
-    // The write barrier and its memory proj must have the same
-    // control otherwise some loop opts could put nodes (Phis) between
-    // them
-    Node* proj = n->find_out_with(Op_ShenandoahWBMemProj);
-    if (proj != NULL) {
-      set_ctrl_and_loop(proj, least);
-    }
-  }
 }
 
 #ifdef ASSERT

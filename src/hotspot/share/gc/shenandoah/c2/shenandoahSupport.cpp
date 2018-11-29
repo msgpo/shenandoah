@@ -1369,6 +1369,35 @@ Node* ShenandoahBarrierNode::no_branches(Node* c, Node* dom, bool allow_one_proj
   return iffproj;
 }
 
+bool ShenandoahBarrierNode::build_loop_late_post(PhaseIdealLoop* phase, Node* n) {
+  if (n->Opcode() == Op_ShenandoahReadBarrier ||
+      n->Opcode() == Op_ShenandoahWriteBarrier ||
+      n->Opcode() == Op_ShenandoahWBMemProj) {
+
+    phase->build_loop_late_post_work(n, false);
+
+    if (n->Opcode() == Op_ShenandoahWriteBarrier) {
+      // The write barrier and its memory proj must have the same
+      // control otherwise some loop opts could put nodes (Phis) between
+      // them
+      Node* proj = n->find_out_with(Op_ShenandoahWBMemProj);
+      if (proj != NULL) {
+        phase->set_ctrl_and_loop(proj, phase->get_ctrl(n));
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+bool ShenandoahBarrierNode::sink_node(PhaseIdealLoop* phase, Node* ctrl, Node* n_ctrl) {
+  ctrl = phase->find_non_split_ctrl(ctrl);
+  assert(phase->dom_depth(n_ctrl) <= phase->dom_depth(ctrl), "n is later than its clone");
+  set_req(0, ctrl);
+  phase->register_new_node(this, ctrl);
+  return true;
+}
+
 #ifdef ASSERT
 void ShenandoahWriteBarrierNode::memory_dominates_all_paths_helper(Node* c, Node* rep_ctrl, Unique_Node_List& controls, PhaseIdealLoop* phase) {
   const bool trace = false;

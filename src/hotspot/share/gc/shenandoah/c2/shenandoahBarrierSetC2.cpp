@@ -1528,3 +1528,14 @@ Node* ShenandoahBarrierSetC2::split_if_pre(PhaseIdealLoop* phase, Node* n) const
 
   return NULL;
 }
+
+bool ShenandoahBarrierSetC2::build_loop_late_post(PhaseIdealLoop* phase, Node* n) const {
+  return ShenandoahBarrierNode::build_loop_late_post(phase, n);
+}
+
+bool ShenandoahBarrierSetC2::sink_node(PhaseIdealLoop* phase, Node* n, Node* x, Node* x_ctrl, Node* n_ctrl) const {
+  if (n->is_ShenandoahBarrier()) {
+    return x->as_ShenandoahBarrier()->sink_node(phase, x_ctrl, n_ctrl);
+  }
+  return false;
+}

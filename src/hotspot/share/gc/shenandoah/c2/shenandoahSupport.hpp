@@ -115,6 +115,8 @@ public:
   static bool is_dominator(Node *d_c, Node *n_c, Node* d, Node* n, PhaseIdealLoop* phase);
   static bool is_dominator_same_ctrl(Node* c, Node* d, Node* n, PhaseIdealLoop* phase);
   static Node* no_branches(Node* c, Node* dom, bool allow_one_proj, PhaseIdealLoop* phase);
+  static bool build_loop_late_post(PhaseIdealLoop* phase, Node* n);
+  bool sink_node(PhaseIdealLoop* phase, Node* ctrl, Node* n_ctrl);
 
 protected:
   uint hash() const;

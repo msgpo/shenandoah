@@ -1318,6 +1318,7 @@ void PhaseIdealLoop::split_if_with_blocks_post(Node *n, bool last_round) {
         // control, then the cloning of n is a pointless exercise, because
         // GVN will ensure that we end up where we started.
         if (!n->is_Load() || late_load_ctrl != n_ctrl) {
+          BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
           for (DUIterator_Last jmin, j = n->last_outs(jmin); j >= jmin; ) {
             Node *u = n->last_out(j); // Clone private computation per use
             _igvn.rehash_node_delayed(u);
@@ -1348,7 +1349,11 @@ void PhaseIdealLoop::split_if_with_blocks_post(Node *n, bool last_round) {
             // For inner loop uses get the preheader area.
             x_ctrl = place_near_use(x_ctrl);
 
-            if (n->is_Load() || n->Opcode() == Op_ShenandoahReadBarrier) {
+            if (bs->sink_node(this, n, x, x_ctrl, n_ctrl)) {
+              continue;
+            }
+
+            if (n->is_Load()) {
               // For loads, add a control edge to a CFG node outside of the loop
               // to force them to not combine and return back inside the loop
               // during GVN optimization (4641526).
@@ -1356,9 +1361,7 @@ void PhaseIdealLoop::split_if_with_blocks_post(Node *n, bool last_round) {
               // Because we are setting the actual control input, factor in
               // the result from get_late_ctrl() so we respect any
               // anti-dependences. (6233005).
-              if (n->is_Load()) {
-                x_ctrl = dom_lca(late_load_ctrl, x_ctrl);
-              }
+              x_ctrl = dom_lca(late_load_ctrl, x_ctrl);
 
               // Don't allow the control input to be a CFG splitting node.
               // Such nodes should only have ProjNodes as outs, e.g. IfNode
@@ -1380,7 +1383,7 @@ void PhaseIdealLoop::split_if_with_blocks_post(Node *n, bool last_round) {
             // to fold a StoreP and an AddP together (as part of an
             // address expression) and the AddP and StoreP have
             // different controls.
-            if (!x->is_Load() && !x->is_DecodeNarrowPtr() && !x->is_ShenandoahBarrier() && !x->is_MergeMem()) _igvn._worklist.yank(x);
+            if (!x->is_Load() && !x->is_DecodeNarrowPtr()) _igvn._worklist.yank(x);
           }
           _igvn.remove_dead_node(n);
         }
