@@ -1537,5 +1537,13 @@ bool ShenandoahBarrierSetC2::sink_node(PhaseIdealLoop* phase, Node* n, Node* x, 
   if (n->is_ShenandoahBarrier()) {
     return x->as_ShenandoahBarrier()->sink_node(phase, x_ctrl, n_ctrl);
   }
+  if (n->is_MergeMem()) {
+    // PhaseIdealLoop::split_if_with_blocks_post() would:
+    // _igvn._worklist.yank(x);
+    // which sometimes causes chains of MergeMem which some of
+    // shenandoah specific code doesn't support
+    phase->register_new_node(x, x_ctrl);
+    return true;
+  }
   return false;
 }
