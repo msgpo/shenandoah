@@ -99,8 +99,6 @@ public:
 
   ShenandoahBarrierSetC2State* state() const;
 
-  Node* shenandoah_read_barrier_acmp(GraphKit* kit, Node* obj);
-
   static const TypeFunc* write_ref_field_pre_entry_Type();
   static const TypeFunc* shenandoah_clone_barrier_Type();
   static const TypeFunc* shenandoah_write_barrier_Type();
