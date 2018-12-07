@@ -447,7 +447,7 @@ public:
 
 #undef TRACESPINNING
 
-class ParallelTaskTerminator: public StackObj {
+class ParallelTaskTerminator: public CHeapObj<mtGC> {
 protected:
   uint _n_threads;
   TaskQueueSetSuper* _queue_set;
@@ -499,6 +499,38 @@ public:
   static void print_termination_counts();
 #endif
 };
+
+#ifdef _MSC_VER
+#pragma warning(push)
+// warning C4521: multiple copy constructors specified
+#pragma warning(disable:4521)
+// warning C4522: multiple assignment operators specified
+#pragma warning(disable:4522)
+#endif
+
+class TaskTerminator : public StackObj {
+private:
+  ParallelTaskTerminator*  _terminator;
+
+  // Disable following copy constructors and assignment operator
+  TaskTerminator(TaskTerminator& o) { }
+  TaskTerminator(const TaskTerminator& o) { }
+  TaskTerminator& operator=(TaskTerminator& o) { return *this; }
+public:
+  TaskTerminator(uint n_threads, TaskQueueSetSuper* queue_set);
+  ~TaskTerminator();
+
+  // Move assignment
+  TaskTerminator& operator=(const TaskTerminator& o);
+
+  ParallelTaskTerminator* terminator() const {
+    return _terminator;
+  }
+};
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
 
 typedef GenericTaskQueue<oop, mtGC>             OopTaskQueue;
 typedef GenericTaskQueueSet<OopTaskQueue, mtGC> OopTaskQueueSet;
