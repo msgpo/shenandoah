@@ -23,9 +23,10 @@
 
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_HPP
-
+#include "gc/shared/owstTaskTerminator.hpp"
 #include "gc/shared/taskqueue.hpp"
 #include "gc/shared/taskqueue.inline.hpp"
+#include "memory/allocation.hpp"
 #include "runtime/mutex.hpp"
 #include "runtime/thread.hpp"
 
@@ -310,54 +311,6 @@ public:
   virtual bool should_force_termination() { return false; }
 };
 
-/*
- * This is an enhanced implementation of Google's work stealing
- * protocol, which is described in the paper:
- * Understanding and improving JVM GC work stealing at the data center scale
- * (http://dl.acm.org/citation.cfm?id=2926706)
- *
- * Instead of a dedicated spin-master, our implementation will let spin-master to relinquish
- * the role before it goes to sleep/wait, so allows newly arrived thread to compete for the role.
- * The intention of above enhancement, is to reduce spin-master's latency on detecting new tasks
- * for stealing and termination condition.
- */
-
-class ShenandoahTaskTerminator: public ParallelTaskTerminator {
-private:
-  Monitor*    _blocker;
-  Thread*     _spin_master;
-
-public:
-  ShenandoahTaskTerminator(uint n_threads, TaskQueueSetSuper* queue_set) :
-    ParallelTaskTerminator(n_threads, queue_set), _spin_master(NULL) {
-    _blocker = new Monitor(Mutex::leaf, "ShenandoahTaskTerminator", false, Monitor::_safepoint_check_never);
-  }
-
-  ~ShenandoahTaskTerminator() {
-    assert(_blocker != NULL, "Can not be NULL");
-    delete _blocker;
-  }
-
-  bool offer_termination(ShenandoahTerminatorTerminator* terminator);
-  bool offer_termination() { return offer_termination((ShenandoahTerminatorTerminator*)NULL); }
-
-private:
-  bool offer_termination(TerminatorTerminator* terminator) {
-    ShouldNotReachHere();
-    return false;
-  }
-
-private:
-  size_t tasks_in_queue_set() { return _queue_set->tasks(); }
-
-  /*
-   * Perform spin-master task.
-   * return true if termination condition is detected
-   * otherwise, return false
-   */
-  bool do_spin_master_work(ShenandoahTerminatorTerminator* terminator);
-};
-
 class ShenandoahCancelledTerminatorTerminator : public ShenandoahTerminatorTerminator {
   virtual bool should_exit_termination() {
     return false;
@@ -365,6 +318,21 @@ class ShenandoahCancelledTerminatorTerminator : public ShenandoahTerminatorTermi
   virtual bool should_force_termination() {
     return true;
   }
+};
+
+class ShenandoahTaskTerminator : public StackObj {
+private:
+  OWSTTaskTerminator* const   _terminator;
+public:
+  ShenandoahTaskTerminator(uint n_threads, TaskQueueSetSuper* queue_set);
+  ~ShenandoahTaskTerminator();
+
+  bool offer_termination(ShenandoahTerminatorTerminator* terminator) {
+    return _terminator->offer_termination(terminator);
+  }
+
+  void reset_for_reuse() { _terminator->reset_for_reuse(); }
+  bool offer_termination() { return offer_termination((ShenandoahTerminatorTerminator*)NULL); }
 };
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_HPP
