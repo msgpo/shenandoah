@@ -24,7 +24,7 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_VM_OPERATIONS_SHENANDOAH_HPP
 #define SHARE_VM_GC_SHENANDOAH_VM_OPERATIONS_SHENANDOAH_HPP
 
-#include "gc/shared/vmGCOperations.hpp"
+#include "gc/shared/gcVMOperations.hpp"
 
 // VM_operations for the Shenandoah Collector.
 //

@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "gc/shared/gcArguments.inline.hpp"
+#include "gc/shared/workerPolicy.hpp"
 #include "gc/shenandoah/shenandoahArguments.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
@@ -80,7 +81,7 @@ void ShenandoahArguments::initialize() {
   }
 
   FLAG_SET_DEFAULT(ParallelGCThreads,
-                   Abstract_VM_Version::parallel_worker_threads());
+                   WorkerPolicy::parallel_worker_threads());
 
   if (FLAG_IS_DEFAULT(ConcGCThreads)) {
     uint conc_threads = MAX2((uint) 1, ParallelGCThreads);
