@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,30 +23,34 @@
 
 /*
  * @test
- * @bug 8143232
- * @summary Test verifies that LF bootstraps properly when run with COMPILE_THRESHOLD set
- * @compile CompileThresholdBootstrapTest.java
- * @run testng/othervm -Djava.lang.invoke.MethodHandle.COMPILE_THRESHOLD=30 test.java.lang.invoke.CompileThresholdBootstrapTest
+ * @bug 8216965
+ * @summary verify no crash when rendering size 1 fonts
  */
-package test.java.lang.invoke;
 
-import java.lang.invoke.MethodHandles;
-import org.testng.*;
-import org.testng.annotations.*;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
+import java.awt.image.BufferedImage;
 
-public final class CompileThresholdBootstrapTest {
+public class FontSize1Test {
 
-    @Test
-    public void testBootstrap() throws Throwable {
-        Assert.assertEquals((int)MethodHandles.constant(int.class, (int)0).invokeExact(), 0);
-    }
+    static final String text = "abcdefghijklmnopqrstuvwxyz";
 
-    public static void main(String ... args) {
-        try {
-            CompileThresholdBootstrapTest test = new CompileThresholdBootstrapTest();
-            test.testBootstrap();
-        } catch (Throwable t) {
-            t.printStackTrace();
+    public static void main(String[] args) {
+
+        BufferedImage bi =
+            new BufferedImage(100, 20, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = bi.createGraphics();
+        Font af[] =
+            GraphicsEnvironment.getLocalGraphicsEnvironment().getAllFonts();
+
+        for (Font f : af) {
+            System.out.println("Looking at font " + f);
+            g2d.setFont(f);
+            g2d.getFontMetrics().getWidths();
+            g2d.drawString(text, 50, 10);
         }
+        g2d.dispose();
     }
+
 }

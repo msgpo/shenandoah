@@ -1,12 +1,10 @@
 /*
- * Copyright (c) 2000, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * published by the Free Software Foundation.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,12 +21,20 @@
  * questions.
  */
 
-#include "jni.h"
-#include "jni_util.h"
-#include "jvm.h"
-#include "jlong.h"
+/*
+ * @test
+ * @bug 8217447
+ * @summary Test running TraceICs enabled.
+ * @run main/othervm -XX:+IgnoreUnrecognizedVMOptions -XX:+TraceICs
+ *                   compiler.arguments.TestTraceICs
+ */
 
-/* this is a fake c file to make the build happy since there is no
-   real SocketDispatcher.c file on Solaris but there is on windows. */
+package compiler.arguments;
 
-static jfieldID fd_fdID;        /* for jint 'fd' in java.io.FileDescriptor */
+public class TestTraceICs {
+
+    static public void main(String[] args) {
+        System.out.println("Passed");
+    }
+}
+

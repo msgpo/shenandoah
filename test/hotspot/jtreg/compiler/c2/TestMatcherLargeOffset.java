@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,32 +21,40 @@
  * questions.
  */
 
-/*
+/**
  * @test
- * @bug 8143232
- * @summary Test verifies that LF bootstraps properly when run with COMPILE_THRESHOLD set
- * @compile CompileThresholdBootstrapTest.java
- * @run testng/othervm -Djava.lang.invoke.MethodHandle.COMPILE_THRESHOLD=30 test.java.lang.invoke.CompileThresholdBootstrapTest
+ * @bug 8202952
+ * @summary C2: Unexpected dead nodes after matching
+ *
+ * @run main/othervm -XX:-TieredCompilation -Xcomp -XX:CompileOnly=::test
+ *      compiler.c2.TestMatcherLargeOffset
  */
-package test.java.lang.invoke;
+package compiler.c2;
 
-import java.lang.invoke.MethodHandles;
-import org.testng.*;
-import org.testng.annotations.*;
+public class TestMatcherLargeOffset {
+    public static final int N = 400;
+    public static int iArrFld[] = new int[N];
 
-public final class CompileThresholdBootstrapTest {
-
-    @Test
-    public void testBootstrap() throws Throwable {
-        Assert.assertEquals((int)MethodHandles.constant(int.class, (int)0).invokeExact(), 0);
+    public static void m(int i4) {
+        i4 |= -104;
+        iArrFld[(i4 >>> 1) % N] >>= i4;
     }
 
-    public static void main(String ... args) {
-        try {
-            CompileThresholdBootstrapTest test = new CompileThresholdBootstrapTest();
-            test.testBootstrap();
-        } catch (Throwable t) {
-            t.printStackTrace();
+    public static void test() {
+        int i2 = 1, i24 = 65;
+        for (int i1 = 7; i1 < 384; ++i1) {
+            for (long l = 2; l < 67; l++) {
+                m(i2);
+                for (i24 = 1; 2 > i24; ++i24) {
+                    iArrFld = iArrFld;
+                }
+            }
+            i2 = (-229 / i24);
+        }
+    }
+    public static void main(String[] strArr) {
+        for (int i = 0; i < 5; i++ ) {
+            test();
         }
     }
 }
