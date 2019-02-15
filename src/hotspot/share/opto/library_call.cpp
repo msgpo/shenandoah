@@ -4485,7 +4485,7 @@ JVMState* LibraryCallKit::arraycopy_restore_alloc_state(AllocateArrayNode* alloc
         for (MergeMemStream mms(merged_memory(), mem->as_MergeMem()); mms.next_non_empty2(); ) {
           Node* n = mms.memory();
           if (n != mms.memory2() && !(n->is_Proj() && n->in(0) == alloc->initialization())) {
-            assert(n->is_Store() || n->Opcode() == Op_ShenandoahWBMemProj, "what else?");
+            assert(n->is_Store(), "what else?");
             no_interfering_store = false;
             break;
           }
@@ -4494,7 +4494,7 @@ JVMState* LibraryCallKit::arraycopy_restore_alloc_state(AllocateArrayNode* alloc
         for (MergeMemStream mms(merged_memory()); mms.next_non_empty(); ) {
           Node* n = mms.memory();
           if (n != mem && !(n->is_Proj() && n->in(0) == alloc->initialization())) {
-            assert(n->is_Store() || n->Opcode() == Op_ShenandoahWBMemProj, "what else?");
+            assert(n->is_Store(), "what else?");
             no_interfering_store = false;
             break;
           }
@@ -4894,7 +4894,8 @@ LibraryCallKit::tightly_coupled_allocation(Node* ptr,
 
   // This arraycopy must unconditionally follow the allocation of the ptr.
   Node* alloc_ctl = ptr->in(0);
-  assert(just_allocated_object(alloc_ctl) == ptr, "most recent allo");
+  Node* jao = just_allocated_object(alloc_ctl);
+  assert(jao == ptr, "most recent allo");
 
   Node* ctl = control();
   while (ctl != alloc_ctl) {
