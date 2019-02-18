@@ -200,6 +200,10 @@ bool ShenandoahBarrierC2Support::verify_helper(Node* in, Node_Stack& phis, Vecto
         if (trace) {
           tty->print("Found argument");
         }
+      } else if (in->Opcode() == Op_CreateEx) {
+        if (trace) {
+          tty->print("Found create-exception");
+        }
       } else if (in->Opcode() == Op_LoadP && in->adr_type() == TypeRawPtr::BOTTOM) {
         if (trace) {
           tty->print("Found raw LoadP (OSR argument?)");
