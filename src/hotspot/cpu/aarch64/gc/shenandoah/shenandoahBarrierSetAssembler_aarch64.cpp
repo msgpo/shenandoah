@@ -417,18 +417,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, Register a
   }
   __ bind(done);
 
-  if (is_cae) {
-    __ mov(result, tmp1);
-    // TODO: For some reason, the LRB in ShBSC2 for cmpxchg-val doesn't seem to be
-    // enough.
-    if (UseCompressedOops) {
-      __ decode_heap_oop(result);
-    }
-    load_reference_barrier(masm, result, rscratch1);
-    if (UseCompressedOops) {
-      __ encode_heap_oop(result);
-    }
-  } else {
+  if (!is_cae) {
     __ cset(result, Assembler::EQ);
   }
 }

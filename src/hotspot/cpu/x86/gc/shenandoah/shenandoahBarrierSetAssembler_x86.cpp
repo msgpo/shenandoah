@@ -600,16 +600,6 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
     assert(res != NULL, "need result register");
     __ setb(Assembler::equal, res);
     __ movzbl(res, res);
-  } else {
-    // TODO: For some reason, the LRB in ShBSC2 for cmpxchg-val doesn't seem to be
-    // enough.
-    if (UseCompressedOops) {
-      __ decode_heap_oop(rax);
-    }
-    load_reference_barrier(masm, rax);
-    if (UseCompressedOops) {
-      __ encode_heap_oop(rax);
-    }
   }
 }
 #endif // LP64
