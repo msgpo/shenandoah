@@ -3069,6 +3069,8 @@ bool ShenandoahLoadReferenceBarrierNode::needs_barrier_impl(PhaseGVN* phase, Nod
     case Op_LoadP:
     case Op_ShenandoahCompareAndExchangeN:
     case Op_ShenandoahCompareAndExchangeP:
+    case Op_CompareAndExchangeN:
+    case Op_CompareAndExchangeP:
     case Op_GetAndSetN:
     case Op_GetAndSetP:
       return true;
