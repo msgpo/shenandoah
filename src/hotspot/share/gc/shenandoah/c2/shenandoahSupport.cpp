@@ -1458,15 +1458,10 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     assert(val->bottom_type()->make_oopptr(), "need oop");
     assert(val->bottom_type()->make_oopptr()->const_oop() == NULL, "expect non-constant");
 
-    enum { _heap_stable = 1, _heap_unstable, PATH_LIMIT };
+    enum { _heap_stable = 1, _not_cset, _not_equal, _evac_path, _null_path, PATH_LIMIT };
     Node* region = new RegionNode(PATH_LIMIT);
     Node* val_phi = new PhiNode(region, uncasted_val->bottom_type()->is_oopptr());
     Node* raw_mem_phi = PhiNode::make(region, raw_mem, Type::MEMORY, TypeRawPtr::BOTTOM);
-
-    enum { _not_cset = 1, _not_equal, _evac_path, _null_path, PATH_LIMIT2 };
-    Node* region2 = new RegionNode(PATH_LIMIT2);
-    Node* val_phi2 = new PhiNode(region2, uncasted_val->bottom_type()->is_oopptr());
-    Node* raw_mem_phi2 = PhiNode::make(region2, raw_mem, Type::MEMORY, TypeRawPtr::BOTTOM);
 
     // Stable path.
     test_heap_stable(ctrl, raw_mem, heap_stable_ctrl, phase);
@@ -1482,13 +1477,13 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     test_null(ctrl, val, null_ctrl, phase);
     if (null_ctrl != NULL) {
       reg2_ctrl = null_ctrl->in(0);
-      region2->init_req(_null_path, null_ctrl);
-      val_phi2->init_req(_null_path, uncasted_val);
-      raw_mem_phi2->init_req(_null_path, raw_mem);
+      region->init_req(_null_path, null_ctrl);
+      val_phi->init_req(_null_path, uncasted_val);
+      raw_mem_phi->init_req(_null_path, raw_mem);
     } else {
-      region2->del_req(_null_path);
-      val_phi2->del_req(_null_path);
-      raw_mem_phi2->del_req(_null_path);
+      region->del_req(_null_path);
+      val_phi->del_req(_null_path);
+      raw_mem_phi->del_req(_null_path);
     }
 
     // Test for in-cset.
@@ -1497,9 +1492,9 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     in_cset_fast_test(ctrl, not_cset_ctrl, uncasted_val, raw_mem, phase);
     if (not_cset_ctrl != NULL) {
       if (reg2_ctrl == NULL) reg2_ctrl = not_cset_ctrl->in(0);
-      region2->init_req(_not_cset, not_cset_ctrl);
-      val_phi2->init_req(_not_cset, uncasted_val);
-      raw_mem_phi2->init_req(_not_cset, raw_mem);
+      region->init_req(_not_cset, not_cset_ctrl);
+      val_phi->init_req(_not_cset, uncasted_val);
+      raw_mem_phi->init_req(_not_cset, raw_mem);
     }
 
     // Resolve object when orig-value is in cset.
@@ -1536,25 +1531,17 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     phase->register_control(if_eq, loop, iff);
 
     // Wire up not-equal-path in slots 3.
-    region2->init_req(_not_equal, if_not_eq);
-    val_phi2->init_req(_not_equal, fwd);
-    raw_mem_phi2->init_req(_not_equal, raw_mem);
+    region->init_req(_not_equal, if_not_eq);
+    val_phi->init_req(_not_equal, fwd);
+    raw_mem_phi->init_req(_not_equal, raw_mem);
 
     // Call wb-stub and wire up that path in slots 4
     Node* result_mem = NULL;
     ctrl = if_eq;
     call_lrb_stub(ctrl, fwd, result_mem, raw_mem, phase);
-    region2->init_req(_evac_path, ctrl);
-    val_phi2->init_req(_evac_path, fwd);
-    raw_mem_phi2->init_req(_evac_path, result_mem);
-
-    phase->register_control(region2, loop, reg2_ctrl);
-    phase->register_new_node(val_phi2, region2);
-    phase->register_new_node(raw_mem_phi2, region2);
-
-    region->init_req(_heap_unstable, region2);
-    val_phi->init_req(_heap_unstable, val_phi2);
-    raw_mem_phi->init_req(_heap_unstable, raw_mem_phi2);
+    region->init_req(_evac_path, ctrl);
+    val_phi->init_req(_evac_path, fwd);
+    raw_mem_phi->init_req(_evac_path, result_mem);
 
     phase->register_control(region, loop, heap_stable_iff);
     Node* out_val = val_phi;
