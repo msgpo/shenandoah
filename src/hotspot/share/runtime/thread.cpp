@@ -2960,7 +2960,7 @@ void JavaThread::nmethods_do(CodeBlobClosure* cf) {
   }
 }
 
-void JavaThread::metadata_do(void f(Metadata*)) {
+void JavaThread::metadata_do(MetadataClosure* f) {
   if (has_last_Java_frame()) {
     // Traverse the execution stack to call f() on the methods in the stack
     for (StackFrameStream fst(this); !fst.is_done(); fst.next()) {
@@ -4574,7 +4574,7 @@ void Threads::nmethods_do(CodeBlobClosure* cf) {
   }
 }
 
-void Threads::metadata_do(void f(Metadata*)) {
+void Threads::metadata_do(MetadataClosure* f) {
   ALL_JAVA_THREADS(p) {
     p->metadata_do(f);
   }
@@ -4773,7 +4773,7 @@ void Threads::print_on_error(outputStream* st, Thread* current, char* buf,
   print_threads_compiling(st, buf, buflen);
 }
 
-void Threads::print_threads_compiling(outputStream* st, char* buf, int buflen) {
+void Threads::print_threads_compiling(outputStream* st, char* buf, int buflen, bool short_form) {
   ALL_JAVA_THREADS(thread) {
     if (thread->is_Compiler_thread()) {
       CompilerThread* ct = (CompilerThread*) thread;
@@ -4786,7 +4786,7 @@ void Threads::print_threads_compiling(outputStream* st, char* buf, int buflen) {
       if (task != NULL) {
         thread->print_name_on_error(st, buf, buflen);
         st->print("  ");
-        task->print(st, NULL, true, true);
+        task->print(st, NULL, short_form, true);
       }
     }
   }

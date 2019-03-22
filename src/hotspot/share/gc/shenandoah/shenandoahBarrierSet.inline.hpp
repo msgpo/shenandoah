@@ -77,7 +77,10 @@ template <DecoratorSet decorators, typename BarrierSetT>
 template <typename T>
 inline void ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_store_in_heap(T* addr, oop value) {
   ShenandoahBarrierSet::barrier_set()->storeval_barrier(value);
-  ShenandoahBarrierSet::barrier_set()->write_ref_field_pre_work(addr, value);
+  const bool keep_alive = (decorators & AS_NO_KEEPALIVE) == 0;
+  if (keep_alive) {
+    ShenandoahBarrierSet::barrier_set()->write_ref_field_pre_work(addr, value);
+  }
   Raw::oop_store_in_heap(addr, value);
 }
 
@@ -108,7 +111,9 @@ template <typename T>
 inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_atomic_cmpxchg_in_heap_impl(oop new_value, T* addr, oop compare_value) {
   ShenandoahBarrierSet::barrier_set()->storeval_barrier(new_value);
   oop result = oop_atomic_cmpxchg_not_in_heap(new_value, addr, compare_value);
-  if (ShenandoahSATBBarrier && !CompressedOops::is_null(result)) {
+  const bool keep_alive = (decorators & AS_NO_KEEPALIVE) == 0;
+  if (keep_alive && ShenandoahSATBBarrier && !CompressedOops::is_null(result) &&
+      oopDesc::equals_raw(result, compare_value)) {
     ShenandoahBarrierSet::barrier_set()->enqueue(result);
   }
   return result;
@@ -145,7 +150,8 @@ template <typename T>
 inline oop ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_atomic_xchg_in_heap_impl(oop new_value, T* addr) {
   ShenandoahBarrierSet::barrier_set()->storeval_barrier(new_value);
   oop result = oop_atomic_xchg_not_in_heap(new_value, addr);
-  if (ShenandoahSATBBarrier && !CompressedOops::is_null(result)) {
+  const bool keep_alive = (decorators & AS_NO_KEEPALIVE) == 0;
+  if (keep_alive && ShenandoahSATBBarrier && !CompressedOops::is_null(result)) {
     ShenandoahBarrierSet::barrier_set()->enqueue(result);
   }
   return result;
