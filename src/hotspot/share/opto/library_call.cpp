@@ -4894,8 +4894,7 @@ LibraryCallKit::tightly_coupled_allocation(Node* ptr,
 
   // This arraycopy must unconditionally follow the allocation of the ptr.
   Node* alloc_ctl = ptr->in(0);
-  Node* jao = just_allocated_object(alloc_ctl);
-  assert(jao == ptr, "most recent allo");
+  assert(just_allocated_object(alloc_ctl) == ptr, "most recent allo");
 
   Node* ctl = control();
   while (ctl != alloc_ctl) {
