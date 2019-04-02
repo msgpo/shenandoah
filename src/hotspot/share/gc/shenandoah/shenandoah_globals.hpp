@@ -244,7 +244,7 @@
           "Time is in microseconds.")                                       \
                                                                             \
   experimental(uintx, ShenandoahEvacAssist, 10,                             \
-          "How many objects to evacuate on WB assist path. "                \
+          "How many objects to evacuate on LRB assist path. "               \
           "Use zero to disable.")                                           \
                                                                             \
   experimental(bool, ShenandoahPacing, true,                                \
@@ -399,6 +399,6 @@
           "Verify no missing barriers in C2")                               \
                                                                             \
   experimental(bool, ShenandoahLoopOptsAfterExpansion, true,                \
-          "Attempt more loop opts after write barrier expansion")           \
+          "Attempt more loop opts after barrier expansion")                 \
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP

@@ -244,7 +244,6 @@ public:
     return idx >= ValueIn;
   }
   virtual uint ideal_reg() const { return Op_RegP; }
-  // virtual Node* Identity(PhaseGVN* phase);
 
   virtual Node* Identity(PhaseGVN* phase);
 

@@ -320,7 +320,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembl
   __ testb(gc_state, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::EVACUATION | ShenandoahHeap::TRAVERSAL);
   __ jccb(Assembler::zero, done);
 
-  // Heap is unstable, need to perform the read-barrier even if WB is inactive
+  // Heap is unstable, need to perform the resolve even if LRB is inactive
   resolve_forward_pointer_not_null(masm, dst);
 
   __ testb(gc_state, ShenandoahHeap::EVACUATION | ShenandoahHeap::TRAVERSAL);
@@ -394,8 +394,7 @@ void ShenandoahBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet d
     load_reference_barrier(masm, dst);
 
     if (ShenandoahKeepAliveBarrier && on_reference) {
-      const Register thread = NOT_LP64(tmp_thread)
-      LP64_ONLY(r15_thread);
+      const Register thread = NOT_LP64(tmp_thread) LP64_ONLY(r15_thread);
       NOT_LP64(__ get_thread(thread));
       // Generate the SATB pre-barrier code to log the value of
       // the referent field in an SATB buffer.
@@ -546,9 +545,9 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
   // Step 2. CAS had failed. This may be a false negative.
   //
   // The trouble comes when we compare the to-space pointer with the from-space
-  // pointer to the same object. To resolve this, it will suffice to read both
-  // oldval and the value from memory through the read barriers -- this will give
-  // both to-space pointers. If they mismatch, then it was a legitimate failure.
+  // pointer to the same object. To resolve this, it will suffice to resolve both
+  // oldval and the value from memory -- this will give both to-space pointers.
+  // If they mismatch, then it was a legitimate failure.
   //
   if (UseCompressedOops) {
     __ decode_heap_oop(tmp1);
@@ -570,8 +569,8 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
   //
   // Corner case: it may happen that somebody stored the from-space pointer
   // to memory while we were preparing for retry. Therefore, we can fail again
-  // on retry, and so need to do this in loop, always re-reading the failure
-  // witness through the read barrier.
+  // on retry, and so need to do this in loop, always resolving the failure
+  // witness.
   __ bind(retry);
   if (os::is_MP()) __ lock();
   if (UseCompressedOops) {

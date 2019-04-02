@@ -1415,7 +1415,7 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     }
   }
 
-  // Expand loadref-barriers
+  // Expand load-reference-barriers
   MemoryGraphFixer fixer(Compile::AliasIdxRaw, true, phase);
   Unique_Node_List uses_to_ignore;
   for (int i = state->load_reference_barriers_count() - 1; i >= 0; i--) {
@@ -1498,7 +1498,7 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     }
 
     // Resolve object when orig-value is in cset.
-    // Make the unconditional resolve for fwdptr, not the read barrier.
+    // Make the unconditional resolve for fwdptr.
     Node* new_val = uncasted_val;
     if (unc_ctrl != NULL) {
       // Clone the null check in this branch to allow implicit null check
@@ -1516,7 +1516,7 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     Node* fwd = new LoadPNode(ctrl, raw_mem, addr, adr_type, obj_type, MemNode::unordered);
     phase->register_new_node(fwd, ctrl);
 
-    // Only branch to WB stub if object is not forwarded; otherwise reply with fwd ptr
+    // Only branch to LRB stub if object is not forwarded; otherwise reply with fwd ptr
     Node* cmp = new CmpPNode(fwd, new_val);
     phase->register_new_node(cmp, ctrl);
     Node* bol = new BoolNode(cmp, BoolTest::eq);
@@ -1579,17 +1579,15 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     }
 
     // The slow path call produces memory: hook the raw memory phi
-    // from the expanded write barrier with the rest of the graph
+    // from the expanded load reference barrier with the rest of the graph
     // which may require adding memory phis at every post dominated
     // region and at enclosing loop heads. Use the memory state
     // collected in memory_nodes to fix the memory graph. Update that
     // memory state as we go.
     fixer.fix_mem(ctrl, region, init_raw_mem, raw_mem_for_ctrl, raw_mem_phi, uses);
   }
-  // Done expanding loadref-barriers.
-
+  // Done expanding load-reference-barriers.
   assert(ShenandoahBarrierSetC2::bsc2()->state()->load_reference_barriers_count() == 0, "all load reference barrier nodes should have been replaced");
-
 
   for (int i = state->enqueue_barriers_count() - 1; i >= 0; i--) {
     Node* barrier = state->enqueue_barrier(i);
@@ -3047,11 +3045,6 @@ bool ShenandoahLoadReferenceBarrierNode::needs_barrier_impl(PhaseGVN* phase, Nod
 
   switch (n->Opcode()) {
     case Op_AddP:
-//      tty->print_cr("ins:");
-//      n->dump(2);
-//      tty->print_cr("outs:");
-//      n->dump(-3);
-//      assert(false, "can refine?");
       return true; // TODO: Can refine?
     case Op_LoadP:
     case Op_ShenandoahCompareAndExchangeN:

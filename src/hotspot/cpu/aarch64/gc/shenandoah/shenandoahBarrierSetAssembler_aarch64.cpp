@@ -187,7 +187,7 @@ void ShenandoahBarrierSetAssembler::satb_write_barrier_pre(MacroAssembler* masm,
 }
 
 void ShenandoahBarrierSetAssembler::resolve_forward_pointer(MacroAssembler* masm, Register dst) {
-  assert(ShenandoahCASBarrier, "should be enabled");
+  assert(ShenandoahLoadRefBarrier || ShenandoahCASBarrier, "Should be enabled");
   Label is_null;
   __ cbz(dst, is_null);
   resolve_forward_pointer_not_null(masm, dst);
@@ -195,7 +195,7 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer(MacroAssembler* masm
 }
 
 void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst) {
-  assert(ShenandoahLoadRefBarrier || ShenandoahCASBarrier, "should be enabled");
+  assert(ShenandoahLoadRefBarrier || ShenandoahCASBarrier, "Should be enabled");
   __ ldr(dst, Address(dst, ShenandoahBrooksPointer::byte_offset()));
 }
 
@@ -217,10 +217,10 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembl
   __ tst(tmp, rscratch2);
   __ br(Assembler::EQ, done);
 
-  // Heap is unstable, need to perform the read-barrier even if WB is inactive
+  // Heap is unstable, need to perform the resolve even if LRB is inactive
   resolve_forward_pointer_not_null(masm, dst);
 
-  // Check for evacuation-in-progress and jump to WB slow-path if needed
+  // Check for evacuation-in-progress and jump to LRB slow-path if needed
   __ mov(rscratch2, ShenandoahHeap::EVACUATION | ShenandoahHeap::TRAVERSAL);
   __ tst(tmp, rscratch2);
   __ br(Assembler::EQ, done);
@@ -530,7 +530,7 @@ address ShenandoahBarrierSetAssembler::shenandoah_lrb() {
 
 #define __ cgen->assembler()->
 
-// Shenandoah write barrier.
+// Shenandoah load reference barrier.
 //
 // Input:
 //   r0: OOP to evacuate.  Not null.
