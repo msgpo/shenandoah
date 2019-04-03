@@ -414,7 +414,9 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, Register a
   }
   __ bind(done);
 
-  if (!is_cae) {
+  if (is_cae) {
+    __ mov(result, tmp1);
+  } else {
     __ cset(result, Assembler::EQ);
   }
 }
