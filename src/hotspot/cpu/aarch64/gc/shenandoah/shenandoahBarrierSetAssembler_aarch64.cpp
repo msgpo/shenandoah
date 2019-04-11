@@ -87,6 +87,16 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
 void ShenandoahBarrierSetAssembler::arraycopy_epilogue(MacroAssembler* masm, DecoratorSet decorators, bool is_oop,
                                                        Register start, Register count, Register scratch, RegSet saved_regs) {
   if (is_oop) {
+      Label done;
+
+      // Avoid calling runtime if count == 0
+      __ cbz(count, done);
+
+      // Is updating references?
+      Address gc_state(rthread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
+      __ ldrb(rscratch1, gc_state);
+      __ tbz(rscratch1, ShenandoahHeap::UPDATEREFS_BITPOS, done);
+
     __ push(saved_regs, sp);
     assert_different_registers(start, count, scratch);
     assert_different_registers(c_rarg0, count);
@@ -94,6 +104,8 @@ void ShenandoahBarrierSetAssembler::arraycopy_epilogue(MacroAssembler* masm, Dec
     __ mov(c_rarg1, count);
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_ref_array_post_entry), 2);
     __ pop(saved_regs, sp);
+
+    __ bind(done);
   }
 }
 
@@ -206,6 +218,7 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer(MacroAssembler* masm
   __ bind(is_null);
 }
 
+// IMPORTANT: This must preserve all registers, even rscratch1 and rscratch2.
 void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst) {
   assert(ShenandoahLoadRefBarrier || ShenandoahCASBarrier, "Should be enabled");
   __ ldr(dst, Address(dst, ShenandoahBrooksPointer::byte_offset()));
@@ -214,28 +227,14 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssemb
 void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembler* masm, Register dst, Register tmp) {
   assert(ShenandoahLoadRefBarrier, "Should be enabled");
   assert(dst != rscratch2, "need rscratch2");
-  if (tmp == noreg) {
-    assert(dst != rscratch1, "need rscratch1");
-    tmp = rscratch1;
-  }
 
   Label done;
-
+  __ enter();
   Address gc_state(rthread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
-  __ ldrb(tmp, gc_state);
+  __ ldrb(rscratch2, gc_state);
 
   // Check for heap stability
-  __ mov(rscratch2, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::EVACUATION | ShenandoahHeap::TRAVERSAL);
-  __ tst(tmp, rscratch2);
-  __ br(Assembler::EQ, done);
-
-  // Heap is unstable, need to perform the resolve even if LRB is inactive
-  resolve_forward_pointer_not_null(masm, dst);
-
-  // Check for evacuation-in-progress and jump to LRB slow-path if needed
-  __ mov(rscratch2, ShenandoahHeap::EVACUATION | ShenandoahHeap::TRAVERSAL);
-  __ tst(tmp, rscratch2);
-  __ br(Assembler::EQ, done);
+  __ tbz(rscratch2, ShenandoahHeap::HAS_FORWARDED_BITPOS, done);
 
   RegSet to_save = RegSet::of(r0);
   if (dst != r0) {
@@ -251,6 +250,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembl
   }
 
   __ bind(done);
+  __ leave();
 }
 
 void ShenandoahBarrierSetAssembler::storeval_barrier(MacroAssembler* masm, Register dst, Register tmp) {
@@ -559,7 +559,7 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
   StubCodeMark mark(cgen, "StubRoutines", "shenandoah_lrb");
   address start = __ pc();
 
-  Label work;
+  Label work, done;
   __ mov(rscratch2, ShenandoahHeap::in_cset_fast_test_addr());
   __ lsr(rscratch1, r0, ShenandoahHeapRegion::region_size_bytes_shift_jint());
   __ ldrb(rscratch2, Address(rscratch2, rscratch1));
@@ -567,7 +567,10 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
   __ ret(lr);
   __ bind(work);
 
-  Register obj = r0;
+  __ mov(rscratch2, r0);
+  resolve_forward_pointer_not_null(cgen->assembler(), r0);
+  __ cmp(rscratch2, r0);
+  __ br(Assembler::NE, done);
 
   __ enter(); // required for proper stackwalking of RuntimeStub frame
 
@@ -575,11 +578,12 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
 
   __ mov(lr, CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_JRT));
   __ blrt(lr, 1, 0, MacroAssembler::ret_type_integral);
-  __ mov(rscratch1, obj);
+  __ mov(rscratch1, r0);
   __ pop_call_clobbered_registers();
-  __ mov(obj, rscratch1);
+  __ mov(r0, rscratch1);
 
   __ leave(); // required for proper stackwalking of RuntimeStub frame
+  __ bind(done);
   __ ret(lr);
 
   return start;
