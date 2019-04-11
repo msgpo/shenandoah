@@ -46,6 +46,7 @@ private:
     ShenandoahOopStore,
     ShenandoahNone,
   };
+
   static bool verify_helper(Node* in, Node_Stack& phis, VectorSet& visited, verify_type t, bool trace, Unique_Node_List& barriers_used);
   static void report_verify_failure(const char* msg, Node* n1 = NULL, Node* n2 = NULL);
   static void verify_raw_mem(RootNode* root);
