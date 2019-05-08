@@ -55,8 +55,8 @@ private:
                                     bool tosca_live,
                                     bool expand_call);
 
-  void resolve_forward_pointer(MacroAssembler* masm, Register dst);
-  void resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst);
+  void resolve_forward_pointer(MacroAssembler* masm, Register dst, Register tmp);
+  void resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst, Register tmp);
 
   void load_reference_barrier_not_null(MacroAssembler* masm, Register dst);
 
@@ -81,7 +81,7 @@ public:
 
   void cmpxchg_oop(MacroAssembler* masm,
                    Register res, Address addr, Register oldval, Register newval,
-                   bool exchange, Register tmp1, Register tmp2);
+                   bool exchange, Register tmp1, Register tmp2, Register tmp3);
   virtual void arraycopy_prologue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                                   Register src, Register dst, Register count);
   virtual void arraycopy_epilogue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -90,13 +90,6 @@ public:
                        Register dst, Address src, Register tmp1, Register tmp_thread);
   virtual void store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                         Address dst, Register val, Register tmp1, Register tmp2);
-
-  virtual void tlab_allocate(MacroAssembler* masm,
-                             Register thread, Register obj,
-                             Register var_size_in_bytes,
-                             int con_size_in_bytes,
-                             Register t1, Register t2,
-                             Label& slow_case);
 
   virtual void barrier_stubs_init();
 

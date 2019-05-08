@@ -250,7 +250,7 @@ void ShenandoahAsserts::assert_in_correct_region(void* interior_loc, oop obj, co
                   file, line);
   }
 
-  size_t alloc_size = obj->size() + ShenandoahForwarding::word_size();
+  size_t alloc_size = obj->size();
   if (alloc_size > ShenandoahHeapRegion::humongous_threshold_words()) {
     size_t idx = r->region_number();
     size_t num_regions = ShenandoahHeapRegion::required_regions(alloc_size * HeapWordSize);

@@ -50,11 +50,19 @@
  */
 
 class ShenandoahMarkCompact : public CHeapObj<mtGC> {
+  friend class ShenandoahPrepareForCompactionObjectClosure;
 private:
   GCTimer* _gc_timer;
 
+  Stack<markOop, mtGC> _preserved_mark_stack;
+  Stack<oop, mtGC> _preserved_oop_stack;
+  Mutex _preserved_mark_lock;
+
 public:
+  ShenandoahMarkCompact() : _gc_timer(NULL), _preserved_mark_stack(), _preserved_oop_stack(),
+                            _preserved_mark_lock(Mutex::leaf, "Shenandoah Preserved Marks Lock", false, Mutex::_safepoint_check_never) {}
   void initialize(GCTimer* gc_timer);
+
   void do_it(GCCause::Cause gc_cause);
 
 private:
@@ -66,6 +74,9 @@ private:
   void calculate_target_humongous_objects();
   void compact_humongous_objects();
 
+  void preserve_mark(oop obj);
+  void restore_marks();
+  void adjust_marks();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHMARKCOMPACT_HPP
