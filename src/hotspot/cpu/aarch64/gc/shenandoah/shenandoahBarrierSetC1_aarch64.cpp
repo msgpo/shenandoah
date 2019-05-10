@@ -36,7 +36,6 @@ void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
   Register cmpval = _cmp_value->as_register();
   Register tmp1 = _tmp1->as_register();
   Register tmp2 = _tmp2->as_register();
-  Register tmp3 = _tmp3->as_register();
   Register result = result_opr()->as_register();
 
   ShenandoahBarrierSet::assembler()->storeval_barrier(masm->masm(), newval, rscratch2);
@@ -48,7 +47,7 @@ void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
     newval = tmp2;
   }
 
-  ShenandoahBarrierSet::assembler()->cmpxchg_oop(masm->masm(), addr, cmpval, newval, /*acquire*/ false, /*release*/ true, /*weak*/ false, /*is_cae*/ false, tmp3, result);
+  ShenandoahBarrierSet::assembler()->cmpxchg_oop(masm->masm(), addr, cmpval, newval, /*acquire*/ false, /*release*/ true, /*weak*/ false, /*is_cae*/ false, result);
 }
 
 #undef __
@@ -73,11 +72,10 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
 
       LIR_Opr t1 = gen->new_register(T_OBJECT);
       LIR_Opr t2 = gen->new_register(T_OBJECT);
-      LIR_Opr t3 = gen->new_register(T_OBJECT);
       LIR_Opr addr = access.resolved_addr()->as_address_ptr()->base();
       LIR_Opr result = gen->new_register(T_INT);
 
-      __ append(new LIR_OpShenandoahCompareAndSwap(addr, cmp_value.result(), new_value.result(), t1, t2, t3, result));
+      __ append(new LIR_OpShenandoahCompareAndSwap(addr, cmp_value.result(), new_value.result(), t1, t2, result));
       return result;
     }
   }

@@ -54,8 +54,8 @@ private:
                                     bool tosca_live,
                                     bool expand_call);
 
-  void resolve_forward_pointer(MacroAssembler* masm, Register dst, Register tmp);
-  void resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst, Register tmp);
+  void resolve_forward_pointer(MacroAssembler* masm, Register dst, Register tmp = noreg);
+  void resolve_forward_pointer_not_null(MacroAssembler* masm, Register dst, Register tmp = noreg);
   void load_reference_barrier(MacroAssembler* masm, Register dst, Register tmp);
   void load_reference_barrier_not_null(MacroAssembler* masm, Register dst, Register tmp);
 
@@ -81,7 +81,7 @@ public:
   virtual void store_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
                         Address dst, Register val, Register tmp1, Register tmp2);
   void cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
-                   bool acquire, bool release, bool weak, bool is_cae, Register tmp, Register result);
+                   bool acquire, bool release, bool weak, bool is_cae, Register result);
 
   virtual void barrier_stubs_init();
 };

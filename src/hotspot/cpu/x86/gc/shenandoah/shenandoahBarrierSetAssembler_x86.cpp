@@ -331,6 +331,14 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssemb
   // - Test lowest two bits == 0
   // - If so, set the lowest two bits
   // - Invert the result back, and copy to dst
+
+  bool borrow_reg = (tmp == noreg);
+  if (borrow_reg) {
+    // No free registers available. Make one useful.
+    tmp = rscratch1;
+    __ push(tmp);
+  }
+
   Label done;
   __ movptr(tmp, Address(dst, oopDesc::mark_offset_in_bytes()));
   __ notptr(tmp);
@@ -340,6 +348,10 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssemb
   __ notptr(tmp);
   __ mov(dst, tmp);
   __ bind(done);
+
+  if (borrow_reg) {
+    __ pop(tmp);
+  }
 }
 
 
@@ -496,7 +508,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
 #else
 void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
                                                 Register res, Address addr, Register oldval, Register newval,
-                                                bool exchange, Register tmp1, Register tmp2, Register tmp3) {
+                                                bool exchange, Register tmp1, Register tmp2) {
   assert(ShenandoahCASBarrier, "Should only be used when CAS barrier is enabled");
   assert(oldval == rax, "must be in rax for implicit use in cmpxchg");
 
@@ -529,7 +541,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
   if (UseCompressedOops) {
     __ decode_heap_oop(tmp1);
   }
-  resolve_forward_pointer(masm, tmp1, tmp3);
+  resolve_forward_pointer(masm, tmp1);
 
   if (UseCompressedOops) {
     __ movl(tmp2, oldval);
@@ -537,7 +549,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
   } else {
     __ movptr(tmp2, oldval);
   }
-  resolve_forward_pointer(masm, tmp2, tmp3);
+  resolve_forward_pointer(masm, tmp2);
 
   __ cmpptr(tmp1, tmp2);
   __ jcc(Assembler::notEqual, done, true);
@@ -563,7 +575,7 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm,
   } else {
     __ movptr(tmp2, oldval);
   }
-  resolve_forward_pointer(masm, tmp2, tmp3);
+  resolve_forward_pointer(masm, tmp2);
 
   __ cmpptr(tmp1, tmp2);
   __ jcc(Assembler::equal, retry, true);

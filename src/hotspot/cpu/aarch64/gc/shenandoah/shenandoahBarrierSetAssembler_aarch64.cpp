@@ -231,6 +231,14 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssemb
   // - Test lowest two bits == 0
   // - If so, set the lowest two bits
   // - Invert the result back, and copy to dst
+
+  bool borrow_reg = (tmp == noreg);
+  if (borrow_reg) {
+    // No free registers available. Make one useful.
+    tmp = rscratch1;
+    __ push(RegSet::of(tmp), sp);
+  }
+
   Label done;
   __ ldr(tmp, Address(dst, oopDesc::mark_offset_in_bytes()));
   __ eon(tmp, tmp, zr);
@@ -239,6 +247,10 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssemb
   __ orr(tmp, tmp, markOopDesc::marked_value);
   __ eon(dst, tmp, zr);
   __ bind(done);
+
+  if (borrow_reg) {
+    __ pop(RegSet::of(tmp), sp);
+  }
 }
 
 void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembler* masm, Register dst, Register tmp) {
@@ -361,7 +373,7 @@ void ShenandoahBarrierSetAssembler::store_at(MacroAssembler* masm, DecoratorSet 
 
 void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, Register addr, Register expected, Register new_val,
                                                 bool acquire, bool release, bool weak, bool is_cae,
-                                                Register tmp, Register result) {
+                                                Register result) {
   Register tmp1 = rscratch1;
   Register tmp2 = rscratch2;
   bool is_narrow = UseCompressedOops;
@@ -397,8 +409,8 @@ void ShenandoahBarrierSetAssembler::cmpxchg_oop(MacroAssembler* masm, Register a
     __ decode_heap_oop(tmp1, tmp1);
     __ decode_heap_oop(tmp2, tmp2);
   }
-  resolve_forward_pointer(masm, tmp1, tmp);
-  resolve_forward_pointer(masm, tmp2, tmp);
+  resolve_forward_pointer(masm, tmp1);
+  resolve_forward_pointer(masm, tmp2);
   __ cmp(tmp1, tmp2);
   // Retry with expected now being the value we just loaded from addr.
   __ br(Assembler::EQ, retry);
