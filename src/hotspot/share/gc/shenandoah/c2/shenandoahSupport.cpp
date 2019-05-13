@@ -1523,15 +1523,16 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     Node* bol = new BoolNode(cmp, BoolTest::eq); // Equals 3 means it's forwarded
     phase->register_new_node(bol, ctrl);
 
-    IfNode* iff = new IfNode(ctrl, bol, PROB_UNLIKELY(0.999), COUNT_UNKNOWN);
+    IfNode* iff = new IfNode(ctrl, bol, PROB_LIKELY(0.999), COUNT_UNKNOWN);
     phase->register_control(iff, loop, ctrl);
     Node* if_fwd = new IfTrueNode(iff);
     phase->register_control(if_fwd, loop, iff);
     Node* if_not_fwd = new IfFalseNode(iff);
     phase->register_control(if_not_fwd, loop, iff);
 
-    // Decode forward pointer.
-    Node* masked2 = new AndXNode(markword, phase->igvn().MakeConX(~markOopDesc::lock_mask_in_place));
+    // Decode forward pointer: since we already have the lowest bits, we can just subtract them
+    // from the mark word without the need for large immediate mask.
+    Node* masked2 = new SubXNode(markword, masked);
     phase->register_new_node(masked2, if_fwd);
     Node* fwdraw = new CastX2PNode(masked2);
     fwdraw->init_req(0, if_fwd);
