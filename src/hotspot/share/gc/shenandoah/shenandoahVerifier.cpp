@@ -278,7 +278,6 @@ public:
    */
   void verify_oops_from(oop obj) {
     _loc = obj;
-    obj = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
     obj->oop_iterate(this);
     _loc = NULL;
   }
