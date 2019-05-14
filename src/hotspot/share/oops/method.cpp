@@ -41,10 +41,12 @@
 #include "memory/metaspaceShared.hpp"
 #include "memory/oopFactory.hpp"
 #include "memory/resourceArea.hpp"
+#include "memory/universe.hpp"
 #include "oops/constMethod.hpp"
 #include "oops/constantPool.hpp"
 #include "oops/method.inline.hpp"
 #include "oops/methodData.hpp"
+#include "oops/objArrayKlass.hpp"
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/symbol.hpp"
@@ -622,6 +624,10 @@ bool Method::can_be_statically_bound(AccessFlags class_access_flags) const {
 
 bool Method::can_be_statically_bound() const {
   return can_be_statically_bound(method_holder()->access_flags());
+}
+
+bool Method::can_be_statically_bound(InstanceKlass* context) const {
+  return (method_holder() == context) && can_be_statically_bound();
 }
 
 bool Method::is_accessor() const {

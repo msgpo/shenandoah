@@ -52,6 +52,7 @@
 #include "memory/iterator.hpp"
 #include "memory/metaspace.hpp"
 #include "memory/resourceArea.hpp"
+#include "memory/universe.hpp"
 
 /**
  * NOTE: We are using the SATB buffer in thread.hpp and satbMarkQueue.hpp, however, it is not an SATB algorithm.
@@ -554,7 +555,10 @@ bool ShenandoahTraversalGC::check_and_handle_cancelled_gc(ShenandoahTaskTerminat
 }
 
 void ShenandoahTraversalGC::concurrent_traversal_collection() {
-  ClassLoaderDataGraph::clear_claimed_marks();
+  {
+    MutexLocker ml(ClassLoaderDataGraph_lock);
+    ClassLoaderDataGraph::clear_claimed_marks();
+  }
 
   ShenandoahGCPhase phase_work(ShenandoahPhaseTimings::conc_traversal);
   if (!_heap->cancelled_gc()) {

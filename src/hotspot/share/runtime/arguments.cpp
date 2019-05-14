@@ -29,7 +29,6 @@
 #include "classfile/moduleEntry.hpp"
 #include "classfile/stringTable.hpp"
 #include "classfile/symbolTable.hpp"
-#include "gc/shared/collectorPolicy.hpp"
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/gcConfig.hpp"
 #include "logging/log.hpp"
@@ -37,7 +36,6 @@
 #include "logging/logStream.hpp"
 #include "logging/logTag.hpp"
 #include "memory/allocation.inline.hpp"
-#include "memory/universe.hpp"
 #include "oops/oop.inline.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/arguments.hpp"
@@ -78,7 +76,6 @@ char*  Arguments::_java_command                 = NULL;
 SystemProperty* Arguments::_system_properties   = NULL;
 const char*  Arguments::_gc_log_filename        = NULL;
 size_t Arguments::_conservative_max_heap_alignment = 0;
-size_t Arguments::_min_heap_size                = 0;
 Arguments::Mode Arguments::_mode                = _mixed;
 bool   Arguments::_java_compiler                = false;
 bool   Arguments::_xdebug_mode                  = false;
@@ -1673,13 +1670,12 @@ void Arguments::set_use_compressed_klass_ptrs() {
 void Arguments::set_conservative_max_heap_alignment() {
   // The conservative maximum required alignment for the heap is the maximum of
   // the alignments imposed by several sources: any requirements from the heap
-  // itself, the collector policy and the maximum page size we may run the VM
-  // with.
+  // itself and the maximum page size we may run the VM with.
   size_t heap_alignment = GCConfig::arguments()->conservative_max_heap_alignment();
   _conservative_max_heap_alignment = MAX4(heap_alignment,
                                           (size_t)os::vm_allocation_granularity(),
                                           os::max_page_size(),
-                                          CollectorPolicy::compute_heap_alignment());
+                                          GCArguments::compute_heap_alignment());
 }
 
 jint Arguments::set_ergonomics_flags() {
@@ -1792,7 +1788,7 @@ void Arguments::set_heap_size() {
 
   // If the minimum or initial heap_size have not been set or requested to be set
   // ergonomically, set them accordingly.
-  if (InitialHeapSize == 0 || min_heap_size() == 0) {
+  if (InitialHeapSize == 0 || MinHeapSize == 0) {
     julong reasonable_minimum = (julong)(OldSize + NewSize);
 
     reasonable_minimum = MIN2(reasonable_minimum, (julong)MaxHeapSize);
@@ -1802,7 +1798,7 @@ void Arguments::set_heap_size() {
     if (InitialHeapSize == 0) {
       julong reasonable_initial = (julong)((phys_mem * InitialRAMPercentage) / 100);
 
-      reasonable_initial = MAX3(reasonable_initial, reasonable_minimum, (julong)min_heap_size());
+      reasonable_initial = MAX3(reasonable_initial, reasonable_minimum, (julong)MinHeapSize);
       reasonable_initial = MIN2(reasonable_initial, (julong)MaxHeapSize);
 
       reasonable_initial = limit_by_allocatable_memory(reasonable_initial);
@@ -1812,9 +1808,9 @@ void Arguments::set_heap_size() {
     }
     // If the minimum heap size has not been set (via -Xms),
     // synchronize with InitialHeapSize to avoid errors with the default value.
-    if (min_heap_size() == 0) {
-      set_min_heap_size(MIN2((size_t)reasonable_minimum, InitialHeapSize));
-      log_trace(gc, heap)("  Minimum heap size " SIZE_FORMAT, min_heap_size());
+    if (MinHeapSize == 0) {
+      MinHeapSize = MIN2((size_t)reasonable_minimum, InitialHeapSize);
+      log_trace(gc, heap)("  Minimum heap size " SIZE_FORMAT, MinHeapSize);
     }
   }
 }
@@ -1856,7 +1852,7 @@ jint Arguments::set_aggressive_heap_flags() {
       return JNI_EINVAL;
     }
     // Currently the minimum size and the initial heap sizes are the same.
-    set_min_heap_size(initHeapSize);
+    MinHeapSize = initHeapSize;
   }
   if (FLAG_IS_DEFAULT(NewSize)) {
     // Make the young generation 3/8ths of the total heap.
@@ -2556,7 +2552,7 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_m
         describe_range_error(errcode);
         return JNI_EINVAL;
       }
-      set_min_heap_size((size_t)long_initial_heap_size);
+      MinHeapSize = (size_t)long_initial_heap_size;
       // Currently the minimum size and the initial heap sizes are the same.
       // Can be overridden with -XX:InitialHeapSize.
       if (FLAG_SET_CMDLINE(size_t, InitialHeapSize, (size_t)long_initial_heap_size) != JVMFlag::SUCCESS) {
@@ -2963,14 +2959,6 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_m
     LogConfiguration::configure_stdout(LogLevel::Info, true, LOG_TAGS(class, path));
   }
 
-  // Change the default value for flags  which have different default values
-  // when working with older JDKs.
-#ifdef LINUX
- if (JDK_Version::current().compare_major(6) <= 0 &&
-      FLAG_IS_DEFAULT(UseLinuxPosixThreadCPUClocks)) {
-    FLAG_SET_DEFAULT(UseLinuxPosixThreadCPUClocks, false);
-  }
-#endif // LINUX
   fix_appclasspath();
 
   return JNI_OK;
@@ -3802,11 +3790,6 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   SharedArchivePath = get_shared_archive_path();
   if (SharedArchivePath == NULL) {
     return JNI_ENOMEM;
-  }
-
-  // Set up VerifySharedSpaces
-  if (FLAG_IS_DEFAULT(VerifySharedSpaces) && SharedArchiveFile != NULL) {
-    VerifySharedSpaces = true;
   }
 
   // Delay warning until here so that we've had a chance to process
