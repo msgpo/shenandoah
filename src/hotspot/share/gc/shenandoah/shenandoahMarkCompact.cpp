@@ -72,8 +72,6 @@ void ShenandoahMarkCompact::do_it(GCCause::Cause gc_cause) {
     Universe::verify();
   }
 
-  _preserved_marks->init(heap->workers()->active_workers());
-
   heap->set_full_gc_in_progress(true);
 
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at a safepoint");
@@ -130,7 +128,9 @@ void ShenandoahMarkCompact::do_it(GCCause::Cause gc_cause) {
     // e. Set back forwarded objects bit back, in case some steps above dropped it.
     heap->set_has_forwarded_objects(has_forwarded_objects);
 
+    // The rest of prologue:
     BiasedLocking::preserve_marks();
+    _preserved_marks->init(heap->workers()->active_workers());
   }
 
   heap->make_parsable(true);
@@ -169,6 +169,16 @@ void ShenandoahMarkCompact::do_it(GCCause::Cause gc_cause) {
     phase4_compact_objects(worker_slices);
   }
 
+  {
+    // Epilogue
+    SharedRestorePreservedMarksTaskExecutor exec(heap->workers());
+    _preserved_marks->restore(&exec);
+    BiasedLocking::restore_marks();
+    _preserved_marks->reclaim();
+
+    JvmtiExport::gc_epilogue();
+  }
+
   // Resize metaspace
   MetaspaceGC::compute_new_size();
 
@@ -177,8 +187,6 @@ void ShenandoahMarkCompact::do_it(GCCause::Cause gc_cause) {
     delete worker_slices[i];
   }
   FREE_C_HEAP_ARRAY(ShenandoahHeapRegionSet*, worker_slices);
-
-  JvmtiExport::gc_epilogue();
 
   heap->set_full_gc_move_in_progress(false);
   heap->set_full_gc_in_progress(false);
@@ -836,11 +844,6 @@ void ShenandoahMarkCompact::phase4_compact_objects(ShenandoahHeapRegionSet** wor
     ShenandoahGCPhase phase(ShenandoahPhaseTimings::full_gc_copy_objects_humong);
     compact_humongous_objects();
   }
-
-  SharedRestorePreservedMarksTaskExecutor exec(heap->workers());
-  _preserved_marks->restore(&exec);
-  BiasedLocking::restore_marks();
-  _preserved_marks->reclaim();
 
   // Reset complete bitmap. We're about to reset the complete-top-at-mark-start pointer
   // and must ensure the bitmap is in sync.
