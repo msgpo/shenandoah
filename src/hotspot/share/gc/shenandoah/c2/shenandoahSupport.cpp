@@ -3194,8 +3194,6 @@ ShenandoahLoadReferenceBarrierNode::Strength ShenandoahLoadReferenceBarrierNode:
       case Op_CastP2X:
       case Op_SafePoint:
       case Op_EncodeISOArray:
-      case Op_LoadKlass:
-      case Op_LoadNKlass:
         strength = STRONG;
         break;
       case Op_LoadB:
@@ -3247,6 +3245,8 @@ ShenandoahLoadReferenceBarrierNode::Strength ShenandoahLoadReferenceBarrierNode:
         break;
       case Op_Conv2B:
       case Op_LoadRange:
+      case Op_LoadKlass:
+      case Op_LoadNKlass:
         // NONE, i.e. leave current strength as is
         break;
       case Op_AddP:
