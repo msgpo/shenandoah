@@ -1093,7 +1093,7 @@ void ShenandoahBarrierC2Support::call_lrb_stub(Node*& ctrl, Node*& val, Node*& r
   mm->set_memory_at(Compile::AliasIdxRaw, raw_mem);
   phase->register_new_node(mm, ctrl);
 
-  Node* call = new CallLeafNode(ShenandoahBarrierSetC2::shenandoah_write_barrier_Type(), CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_JRT), "shenandoah_write_barrier", TypeRawPtr::BOTTOM);
+  Node* call = new CallLeafNode(ShenandoahBarrierSetC2::shenandoah_load_reference_barrier_Type(), CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_JRT), "shenandoah_load_reference_barrier", TypeRawPtr::BOTTOM);
   call->init_req(TypeFunc::Control, ctrl);
   call->init_req(TypeFunc::I_O, phase->C->top());
   call->init_req(TypeFunc::Memory, mm);
@@ -1190,12 +1190,6 @@ static Node* create_phis_on_call_return(Node* ctrl, Node* c, Node* n, Node* n_cl
 
 void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
   ShenandoahBarrierSetC2State* state = ShenandoahBarrierSetC2::bsc2()->state();
-
-  // Collect raw memory state at CFG points in the entire graph and
-  // record it in memory_nodes. Optimize the raw memory graph in the
-  // process. Optimizing the memory graph also makes the memory graph
-  // simpler.
-  GrowableArray<MemoryGraphFixer*> memory_graph_fixers;
 
   Unique_Node_List uses;
   for (int i = 0; i < state->enqueue_barriers_count(); i++) {
@@ -1412,6 +1406,22 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     }
   }
 
+  for (int i = 0; i < state->load_reference_barriers_count(); i++) {
+    ShenandoahLoadReferenceBarrierNode* lrb = state->load_reference_barrier(i);
+    if (lrb->get_barrier_strength() == ShenandoahLoadReferenceBarrierNode::NONE) {
+      continue;
+    }
+    Node* ctrl = phase->get_ctrl(lrb);
+    IdealLoopTree* loop = phase->get_loop(ctrl);
+    if (loop->_head->is_OuterStripMinedLoop()) {
+      // Expanding a barrier here will break loop strip mining
+      // verification. Transform the loop so the loop nest doesn't
+      // appear as strip mined.
+      OuterStripMinedLoopNode* outer = loop->_head->as_OuterStripMinedLoop();
+      hide_strip_mined_loop(outer, outer->unique_ctrl_out()->as_CountedLoop(), phase);
+    }
+  }
+
   // Expand load-reference-barriers
   MemoryGraphFixer fixer(Compile::AliasIdxRaw, true, phase);
   Unique_Node_List uses_to_ignore;
@@ -1431,7 +1441,6 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     Node* raw_mem = fixer.find_mem(ctrl, lrb);
     Node* init_raw_mem = raw_mem;
     Node* raw_mem_for_ctrl = fixer.find_mem(ctrl, NULL);
-    // int alias = phase->C->get_alias_index(lrb->adr_type());
 
     IdealLoopTree *loop = phase->get_loop(ctrl);
     CallStaticJavaNode* unc = lrb->pin_and_expand_null_check(phase->igvn());
@@ -1505,7 +1514,7 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
       IfNode* iff = unc_ctrl->in(0)->as_If();
       phase->igvn().replace_input_of(iff, 1, phase->igvn().intcon(1));
     }
-    Node* addr = new AddPNode(new_val, new_val, phase->igvn().MakeConX(oopDesc::mark_offset_in_bytes()));
+    Node* addr = new AddPNode(new_val, uncasted_val, phase->igvn().MakeConX(oopDesc::mark_offset_in_bytes()));
     phase->register_new_node(addr, ctrl);
     assert(new_val->bottom_type()->isa_oopptr(), "what else?");
     Node* markword = new LoadXNode(ctrl, raw_mem, addr, TypeRawPtr::BOTTOM, TypeX_X, MemNode::unordered);
@@ -1543,7 +1552,7 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     val_phi->init_req(_fwded, fwd);
     raw_mem_phi->init_req(_fwded, raw_mem);
 
-    // Call wb-stub and wire up that path in slots 4
+    // Call lrb-stub and wire up that path in slots 4
     Node* result_mem = NULL;
     ctrl = if_not_fwd;
     fwd = new_val;
@@ -1991,7 +2000,7 @@ void ShenandoahBarrierC2Support::verify_raw_mem(RootNode* root) {
   nodes.push(root);
   for (uint next = 0; next < nodes.size(); next++) {
     Node *n  = nodes.at(next);
-    if (ShenandoahBarrierSetC2::is_shenandoah_wb_call(n)) {
+    if (ShenandoahBarrierSetC2::is_shenandoah_lrb_call(n)) {
       controls.push(n);
       if (trace) { tty->print("XXXXXX verifying"); n->dump(); }
       for (uint next2 = 0; next2 < controls.size(); next2++) {
@@ -2607,7 +2616,11 @@ void MemoryGraphFixer::fix_mem(Node* ctrl, Node* new_ctrl, Node* mem, Node* mem_
                 IdealLoopTree* l = loop;
                 create_phi = false;
                 while (l != _phase->ltree_root()) {
-                  if (_phase->is_dominator(l->_head, u) && _phase->is_dominator(_phase->idom(u), l->_head)) {
+                  Node* head = l->_head;
+                  if (head->in(0) == NULL) {
+                    head = _phase->get_ctrl(head);
+                  }
+                  if (_phase->is_dominator(head, u) && _phase->is_dominator(_phase->idom(u), head)) {
                     create_phi = true;
                     do_check = false;
                     break;

@@ -365,6 +365,7 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssemb
 
 void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembler* masm, Register dst) {
   assert(ShenandoahLoadRefBarrier, "Should be enabled");
+
   Label done;
 
 #ifdef _LP64

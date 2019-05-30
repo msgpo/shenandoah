@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahTraversalGC.hpp"
 #include "gc/shared/space.inline.hpp"
+#include "jfr/jfrEvents.hpp"
 #include "memory/iterator.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
@@ -92,7 +93,7 @@ void ShenandoahHeapRegion::make_regular_allocation() {
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
-      _state = _regular;
+      set_state(_regular);
     case _regular:
     case _pinned:
       return;
@@ -113,10 +114,10 @@ void ShenandoahHeapRegion::make_regular_bypass() {
     case _cset:
     case _humongous_start:
     case _humongous_cont:
-      _state = _regular;
+      set_state(_regular);
       return;
     case _pinned_cset:
-      _state = _pinned;
+      set_state(_pinned);
       return;
     case _regular:
     case _pinned:
@@ -132,7 +133,7 @@ void ShenandoahHeapRegion::make_humongous_start() {
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
-      _state = _humongous_start;
+      set_state(_humongous_start);
       return;
     default:
       report_illegal_transition("humongous start allocation");
@@ -148,7 +149,7 @@ void ShenandoahHeapRegion::make_humongous_start_bypass() {
     case _regular:
     case _humongous_start:
     case _humongous_cont:
-      _state = _humongous_start;
+      set_state(_humongous_start);
       return;
     default:
       report_illegal_transition("humongous start bypass");
@@ -161,7 +162,7 @@ void ShenandoahHeapRegion::make_humongous_cont() {
     case _empty_uncommitted:
       do_commit();
     case _empty_committed:
-      _state = _humongous_cont;
+     set_state(_humongous_cont);
       return;
     default:
       report_illegal_transition("humongous continuation allocation");
@@ -177,7 +178,7 @@ void ShenandoahHeapRegion::make_humongous_cont_bypass() {
     case _regular:
     case _humongous_start:
     case _humongous_cont:
-      _state = _humongous_cont;
+      set_state(_humongous_cont);
       return;
     default:
       report_illegal_transition("humongous continuation bypass");
@@ -189,14 +190,14 @@ void ShenandoahHeapRegion::make_pinned() {
   switch (_state) {
     case _regular:
       assert (_critical_pins == 0, "sanity");
-      _state = _pinned;
+      set_state(_pinned);
     case _pinned_cset:
     case _pinned:
       _critical_pins++;
       return;
     case _humongous_start:
       assert (_critical_pins == 0, "sanity");
-      _state = _pinned_humongous_start;
+      set_state(_pinned_humongous_start);
     case _pinned_humongous_start:
       _critical_pins++;
       return;
@@ -218,7 +219,7 @@ void ShenandoahHeapRegion::make_unpinned() {
       assert (_critical_pins > 0, "sanity");
       _critical_pins--;
       if (_critical_pins == 0) {
-        _state = _regular;
+        set_state(_regular);
       }
       return;
     case _regular:
@@ -230,14 +231,14 @@ void ShenandoahHeapRegion::make_unpinned() {
       assert (_critical_pins > 0, "sanity");
       _critical_pins--;
       if (_critical_pins == 0) {
-        _state = _cset;
+        set_state(_cset);
       }
       return;
     case _pinned_humongous_start:
       assert (_critical_pins > 0, "sanity");
       _critical_pins--;
       if (_critical_pins == 0) {
-        _state = _humongous_start;
+        set_state(_humongous_start);
       }
       return;
     default:
@@ -249,7 +250,7 @@ void ShenandoahHeapRegion::make_cset() {
   _heap->assert_heaplock_owned_by_current_thread();
   switch (_state) {
     case _regular:
-      _state = _cset;
+      set_state(_cset);
     case _cset:
       return;
     default:
@@ -267,7 +268,7 @@ void ShenandoahHeapRegion::make_trash() {
       // Reclaiming humongous regions
     case _regular:
       // Immediate region reclaim
-      _state = _trash;
+      set_state(_trash);
       return;
     default:
       report_illegal_transition("trashing");
@@ -286,7 +287,7 @@ void ShenandoahHeapRegion::make_empty() {
   _heap->assert_heaplock_owned_by_current_thread();
   switch (_state) {
     case _trash:
-      _state = _empty_committed;
+      set_state(_empty_committed);
       _empty_time = os::elapsedTime();
       return;
     default:
@@ -299,7 +300,7 @@ void ShenandoahHeapRegion::make_uncommitted() {
   switch (_state) {
     case _empty_committed:
       do_uncommit();
-      _state = _empty_uncommitted;
+      set_state(_empty_uncommitted);
       return;
     default:
       report_illegal_transition("uncommiting");
@@ -313,7 +314,7 @@ void ShenandoahHeapRegion::make_committed_bypass() {
   switch (_state) {
     case _empty_uncommitted:
       do_commit();
-      _state = _empty_committed;
+      set_state(_empty_committed);
       return;
     default:
       report_illegal_transition("commit bypass");
@@ -677,4 +678,17 @@ void ShenandoahHeapRegion::do_uncommit() {
     report_java_out_of_memory("Unable to uncommit bitmaps for region");
   }
   _heap->decrease_committed(ShenandoahHeapRegion::region_size_bytes());
+}
+
+void ShenandoahHeapRegion::set_state(RegionState to) {
+  EventShenandoahHeapRegionStateChange evt;
+  if (evt.should_commit()){
+    evt.set_index((unsigned)region_number());
+    evt.set_start((uintptr_t)bottom());
+    evt.set_used(used());
+    evt.set_from(_state);
+    evt.set_to(to);
+    evt.commit();
+  }
+  _state = to;
 }
