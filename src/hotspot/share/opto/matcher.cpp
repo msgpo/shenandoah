@@ -2067,6 +2067,9 @@ void Matcher::find_shared( Node *n ) {
         // This causes it to match into a register for the sharing.
         set_shared(n);       // Flag as shared and
         if (n->is_DecodeNarrowPtr()) {
+          // Oop field/array element loads must be shared but since
+          // they are shared through a DecodeN they may appear to have
+          // a single use so force sharing here.
           set_shared(n->in(1));
         }
         mstack.pop();        // remove node from stack
