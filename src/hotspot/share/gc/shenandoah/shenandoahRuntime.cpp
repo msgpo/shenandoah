@@ -56,8 +56,15 @@ JRT_LEAF(void, ShenandoahRuntime::write_ref_field_pre_entry(oopDesc* orig, JavaT
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_JRT(oopDesc* src))
-  oop result = ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator(src);
-  return (oopDesc*) result;
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator(src, (oop*)NULL);
+JRT_END
+
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_fixup_JRT(oopDesc* src, oop* load_addr))
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator(src, load_addr);
+JRT_END
+
+JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_fixup_narrow_JRT(oopDesc* src, narrowOop* load_addr))
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator(src, load_addr);
 JRT_END
 
 // Shenandoah clone barrier: makes sure that references point to to-space

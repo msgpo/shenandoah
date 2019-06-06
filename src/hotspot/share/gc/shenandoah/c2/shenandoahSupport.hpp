@@ -60,7 +60,7 @@ private:
   static void test_null(Node*& ctrl, Node* val, Node*& null_ctrl, PhaseIdealLoop* phase);
   static void test_heap_stable(Node*& ctrl, Node* raw_mem, Node*& heap_stable_ctrl,
                                PhaseIdealLoop* phase);
-  static void call_lrb_stub(Node*& ctrl, Node*& val, Node*& result_mem, Node* raw_mem, PhaseIdealLoop* phase);
+  static void call_lrb_stub(Node*& ctrl, Node*& val, Node* load_addr, Node*& result_mem, Node* raw_mem, PhaseIdealLoop* phase);
   static Node* clone_null_check(Node*& c, Node* val, Node* unc_ctrl, PhaseIdealLoop* phase);
   static void fix_null_check(Node* unc, Node* unc_ctrl, Node* new_unc_ctrl, Unique_Node_List& uses,
                              PhaseIdealLoop* phase);
@@ -227,14 +227,15 @@ class ShenandoahLoadReferenceBarrierNode : public Node {
 public:
   enum {
     Control,
-    ValueIn
+    ValueIn,
+    LoadAddr
   };
 
   enum Strength {
     NONE, WEAK, STRONG, NA
   };
 
-  ShenandoahLoadReferenceBarrierNode(Node* ctrl, Node* val);
+  ShenandoahLoadReferenceBarrierNode(Node* ctrl, Node* val, Node* load_addr);
 
   virtual int Opcode() const;
   virtual const Type* bottom_type() const;
