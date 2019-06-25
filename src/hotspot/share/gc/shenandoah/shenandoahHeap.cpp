@@ -2082,11 +2082,11 @@ void ShenandoahHeap::set_update_refs_in_progress(bool in_progress) {
 }
 
 void ShenandoahHeap::register_nmethod(nmethod* nm) {
-  ShenandoahCodeRoots::add_nmethod(nm);
+  ShenandoahCodeRoots::register_nmethod(nm);
 }
 
 void ShenandoahHeap::unregister_nmethod(nmethod* nm) {
-  ShenandoahCodeRoots::remove_nmethod(nm);
+  ShenandoahCodeRoots::unregister_nmethod(nm);
 }
 
 oop ShenandoahHeap::pin_object(JavaThread* thr, oop o) {

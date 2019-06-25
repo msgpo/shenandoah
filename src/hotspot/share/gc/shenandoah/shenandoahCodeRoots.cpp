@@ -26,6 +26,7 @@
 #include "code/nmethod.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahCodeRoots.hpp"
+#include "gc/shenandoah/shenandoahNMethod.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
@@ -97,69 +98,28 @@ void ShenandoahParallelCodeHeapIterator::parallel_blobs_do(CodeBlobClosure* f) {
   _finished = true;
 }
 
-class ShenandoahNMethodOopDetector : public OopClosure {
-private:
-  ResourceMark rm; // For growable array allocation below.
-  GrowableArray<oop*> _oops;
-
-public:
-  ShenandoahNMethodOopDetector() : _oops(10) {};
-
-  void do_oop(oop* o) {
-    _oops.append(o);
-  }
-  void do_oop(narrowOop* o) {
-    fatal("NMethods should not have compressed oops embedded.");
-  }
-
-  GrowableArray<oop*>* oops() {
-    return &_oops;
-  }
-
-  bool has_oops() {
-    return !_oops.is_empty();
-  }
-};
-
-GrowableArray<ShenandoahNMethod*>* ShenandoahCodeRoots::_recorded_nms;
-ShenandoahLock                     ShenandoahCodeRoots::_recorded_nms_lock;
+ShenandoahNMethodTable* ShenandoahCodeRoots::_nmethod_table;
 
 void ShenandoahCodeRoots::initialize() {
-  _recorded_nms = new (ResourceObj::C_HEAP, mtGC) GrowableArray<ShenandoahNMethod*>(100, true, mtGC);
+  _nmethod_table = new ShenandoahNMethodTable();
 }
 
-void ShenandoahCodeRoots::add_nmethod(nmethod* nm) {
+void ShenandoahCodeRoots::register_nmethod(nmethod* nm) {
   switch (ShenandoahCodeRootsStyle) {
     case 0:
     case 1:
       break;
     case 2: {
       assert_locked_or_safepoint(CodeCache_lock);
-      ShenandoahLocker locker(CodeCache_lock->owned_by_self() ? NULL : &_recorded_nms_lock);
-
-      ShenandoahNMethodOopDetector detector;
-      nm->oops_do(&detector);
-
-      if (detector.has_oops()) {
-        ShenandoahNMethod* nmr = new ShenandoahNMethod(nm, detector.oops());
-        nmr->assert_alive_and_correct();
-        int idx = _recorded_nms->find(nm, ShenandoahNMethod::find_with_nmethod);
-        if (idx != -1) {
-          ShenandoahNMethod* old = _recorded_nms->at(idx);
-          _recorded_nms->at_put(idx, nmr);
-          delete old;
-        } else {
-          _recorded_nms->append(nmr);
-        }
-      }
+      _nmethod_table->register_nmethod(nm);
       break;
     }
     default:
       ShouldNotReachHere();
   }
-};
+}
 
-void ShenandoahCodeRoots::remove_nmethod(nmethod* nm) {
+void ShenandoahCodeRoots::unregister_nmethod(nmethod* nm) {
   switch (ShenandoahCodeRootsStyle) {
     case 0:
     case 1: {
@@ -167,19 +127,7 @@ void ShenandoahCodeRoots::remove_nmethod(nmethod* nm) {
     }
     case 2: {
       assert_locked_or_safepoint(CodeCache_lock);
-      ShenandoahLocker locker(CodeCache_lock->owned_by_self() ? NULL : &_recorded_nms_lock);
-
-      ShenandoahNMethodOopDetector detector;
-      nm->oops_do(&detector, /* allow_dead = */ true);
-
-      if (detector.has_oops()) {
-        int idx = _recorded_nms->find(nm, ShenandoahNMethod::find_with_nmethod);
-        assert(idx != -1, "nmethod " PTR_FORMAT " should be registered", p2i(nm));
-        ShenandoahNMethod* old = _recorded_nms->at(idx);
-        old->assert_same_oops(detector.oops());
-        _recorded_nms->delete_at(idx);
-        delete old;
-      }
+      _nmethod_table->unregister_nmethod(nm);
       break;
     }
     default:
@@ -188,9 +136,7 @@ void ShenandoahCodeRoots::remove_nmethod(nmethod* nm) {
 }
 
 ShenandoahCodeRootsIterator::ShenandoahCodeRootsIterator() :
-        _heap(ShenandoahHeap::heap()),
-        _par_iterator(CodeCache::heaps()),
-        _claimed(0) {
+        _par_iterator(CodeCache::heaps()) {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at safepoint");
   assert(!Thread::current()->is_Worker_thread(), "Should not be acquired by workers");
   switch (ShenandoahCodeRootsStyle) {
@@ -201,6 +147,7 @@ ShenandoahCodeRootsIterator::ShenandoahCodeRootsIterator() :
     }
     case 2: {
       CodeCache_lock->lock();
+      ShenandoahCodeRoots::table()->prepare_for_iteration();
       break;
     }
     default:
@@ -216,6 +163,7 @@ ShenandoahCodeRootsIterator::~ShenandoahCodeRootsIterator() {
       break;
     }
     case 2: {
+      ShenandoahCodeRoots::table()->finish_iteration();
       CodeCache_lock->unlock();
       break;
     }
@@ -257,73 +205,6 @@ void ShenandoahCsetCodeRootsIterator::possibly_parallel_blobs_do(CodeBlobClosure
 template <bool CSET_FILTER>
 void ShenandoahCodeRootsIterator::fast_parallel_blobs_do(CodeBlobClosure *f) {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at safepoint");
-
-  size_t stride = 256; // educated guess
-
-  GrowableArray<ShenandoahNMethod*>* list = ShenandoahCodeRoots::_recorded_nms;
-
-  size_t max = (size_t)list->length();
-  while (_claimed < max) {
-    size_t cur = Atomic::add(stride, &_claimed) - stride;
-    size_t start = cur;
-    size_t end = MIN2(cur + stride, max);
-    if (start >= max) break;
-
-    for (size_t idx = start; idx < end; idx++) {
-      ShenandoahNMethod* nmr = list->at((int) idx);
-      nmr->assert_alive_and_correct();
-
-      if (CSET_FILTER && !nmr->has_cset_oops(_heap)) {
-        continue;
-      }
-
-      f->do_code_blob(nmr->nm());
-    }
-  }
+  ShenandoahCodeRoots::table()->parallel_blobs_do<CSET_FILTER>(f);
 }
 
-ShenandoahNMethod::ShenandoahNMethod(nmethod* nm, GrowableArray<oop*>* oops) {
-  _nm = nm;
-  _oops = NEW_C_HEAP_ARRAY(oop*, oops->length(), mtGC);
-  _oops_count = oops->length();
-  for (int c = 0; c < _oops_count; c++) {
-    _oops[c] = oops->at(c);
-  }
-}
-
-ShenandoahNMethod::~ShenandoahNMethod() {
-  if (_oops != NULL) {
-    FREE_C_HEAP_ARRAY(oop*, _oops);
-  }
-}
-
-bool ShenandoahNMethod::has_cset_oops(ShenandoahHeap *heap) {
-  for (int c = 0; c < _oops_count; c++) {
-    oop o = RawAccess<>::oop_load(_oops[c]);
-    if (heap->in_collection_set(o)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-#ifdef ASSERT
-void ShenandoahNMethod::assert_alive_and_correct() {
-  assert(_nm->is_alive(), "only alive nmethods here");
-  assert(_oops_count > 0, "should have filtered nmethods without oops before");
-  ShenandoahHeap* heap = ShenandoahHeap::heap();
-  for (int c = 0; c < _oops_count; c++) {
-    oop *loc = _oops[c];
-    assert(_nm->code_contains((address) loc) || _nm->oops_contains(loc), "nmethod should contain the oop*");
-    oop o = RawAccess<>::oop_load(loc);
-    shenandoah_assert_correct_except(loc, o, o == NULL || heap->is_full_gc_move_in_progress());
-  }
-}
-
-void ShenandoahNMethod::assert_same_oops(GrowableArray<oop*>* oops) {
-  assert(_oops_count == oops->length(), "should have the same number of oop*");
-  for (int c = 0; c < _oops_count; c++) {
-    assert(_oops[c] == oops->at(c), "should be the same oop*");
-  }
-}
-#endif
