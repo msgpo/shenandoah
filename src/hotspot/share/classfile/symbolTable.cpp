@@ -77,8 +77,7 @@ static OffsetCompactHashtable<
 
 // --------------------------------------------------------------------------
 
-typedef ConcurrentHashTable<Symbol*,
-                            SymbolTableConfig, mtSymbol> SymbolTableHash;
+typedef ConcurrentHashTable<SymbolTableConfig, mtSymbol> SymbolTableHash;
 static SymbolTableHash* _local_table = NULL;
 
 volatile bool SymbolTable::_has_work = 0;
@@ -121,10 +120,12 @@ static uintx hash_shared_symbol(const char* s, int len) {
 }
 #endif
 
-class SymbolTableConfig : public SymbolTableHash::BaseConfig {
+class SymbolTableConfig : public AllStatic {
 private:
 public:
-  static uintx get_hash(Symbol* const& value, bool* is_dead) {
+  typedef Symbol* Value;  // value of the Node in the hashtable
+
+  static uintx get_hash(Value const& value, bool* is_dead) {
     *is_dead = (value->refcount() == 0);
     if (*is_dead) {
       return 0;
@@ -133,11 +134,11 @@ public:
     }
   }
   // We use default allocation/deallocation but counted
-  static void* allocate_node(size_t size, Symbol* const& value) {
+  static void* allocate_node(size_t size, Value const& value) {
     SymbolTable::item_added();
-    return SymbolTableHash::BaseConfig::allocate_node(size, value);
+    return AllocateHeap(size, mtSymbol);
   }
-  static void free_node(void* memory, Symbol* const& value) {
+  static void free_node(void* memory, Value const& value) {
     // We get here because #1 some threads lost a race to insert a newly created Symbol
     // or #2 we're cleaning up unused symbol.
     // If #1, then the symbol can be either permanent (refcount==PERM_REFCOUNT),
@@ -150,7 +151,7 @@ public:
       assert(value->refcount() == 0, "expected dead symbol");
     }
     SymbolTable::delete_symbol(value);
-    SymbolTableHash::BaseConfig::free_node(memory, value);
+    FreeHeap(memory);
     SymbolTable::item_removed();
   }
 };
@@ -267,7 +268,7 @@ void SymbolTable::symbols_do(SymbolClosure *cl) {
   // all symbols from the dynamic table
   SymbolsDo sd(cl);
   if (!_local_table->try_scan(Thread::current(), sd)) {
-    log_info(stringtable)("symbols_do unavailable at this moment");
+    log_info(symboltable)("symbols_do unavailable at this moment");
   }
 }
 
@@ -557,7 +558,7 @@ void SymbolTable::verify() {
   Thread* thr = Thread::current();
   VerifySymbols vs;
   if (!_local_table->try_scan(thr, vs)) {
-    log_info(stringtable)("verify unavailable at this moment");
+    log_info(symboltable)("verify unavailable at this moment");
   }
 }
 
@@ -763,8 +764,9 @@ bool SymbolTable::do_rehash() {
     return false;
   }
 
-  // We use max size
-  SymbolTableHash* new_table = new SymbolTableHash(END_SIZE, END_SIZE, REHASH_LEN);
+  // We use current size
+  size_t new_size = _local_table->get_size_log2(Thread::current());
+  SymbolTableHash* new_table = new SymbolTableHash(new_size, END_SIZE, REHASH_LEN);
   // Use alt hash from now on
   _alt_hash = true;
   if (!_local_table->try_move_nodes_to(Thread::current(), new_table)) {

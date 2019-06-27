@@ -46,6 +46,9 @@
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
 #endif
+#if INCLUDE_ZGC
+#include "gc/z/zThreadLocalData.hpp"
+#endif
 
 #ifdef BUILTIN_SIM
 #include "../../../../../../simulator/simulator.hpp"
@@ -579,6 +582,16 @@ class StubGenerator: public StubCodeGenerator {
     // object is in r0
     // make sure object is 'reasonable'
     __ cbz(r0, exit); // if obj is NULL it is OK
+
+#if INCLUDE_ZGC
+    if (UseZGC) {
+      // Check if mask is good.
+      // verifies that ZAddressBadMask & r0 == 0
+      __ ldr(c_rarg3, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      __ andr(c_rarg2, r0, c_rarg3);
+      __ cbnz(c_rarg2, error);
+    }
+#endif
 
     // Check if the oop is in the right area of memory
     __ mov(c_rarg3, (intptr_t) Universe::verify_oop_mask());
@@ -1370,7 +1383,12 @@ class StubGenerator: public StubCodeGenerator {
       // save regs before copy_memory
       __ push(RegSet::of(d, count), sp);
     }
-    copy_memory(aligned, s, d, count, rscratch1, size);
+    {
+      // UnsafeCopyMemory page error: continue after ucm
+      bool add_entry = !is_oop && (!aligned || sizeof(jlong) == size);
+      UnsafeCopyMemoryMark ucmm(this, add_entry, true);
+      copy_memory(aligned, s, d, count, rscratch1, size);
+    }
 
     if (is_oop) {
       __ pop(RegSet::of(d, count), sp);
@@ -1442,7 +1460,12 @@ class StubGenerator: public StubCodeGenerator {
       // save regs before copy_memory
       __ push(RegSet::of(d, count), sp);
     }
-    copy_memory(aligned, s, d, count, rscratch1, -size);
+    {
+      // UnsafeCopyMemory page error: continue after ucm
+      bool add_entry = !is_oop && (!aligned || sizeof(jlong) == size);
+      UnsafeCopyMemoryMark ucmm(this, add_entry, true);
+      copy_memory(aligned, s, d, count, rscratch1, -size);
+    }
     if (is_oop) {
       __ pop(RegSet::of(d, count), sp);
       if (VerifyOops)
@@ -5803,6 +5826,10 @@ class StubGenerator: public StubCodeGenerator {
   }
 }; // end class declaration
 
+#define UCM_TABLE_MAX_ENTRIES 8
 void StubGenerator_generate(CodeBuffer* code, bool all) {
+  if (UnsafeCopyMemory::_table == NULL) {
+    UnsafeCopyMemory::create_table(UCM_TABLE_MAX_ENTRIES);
+  }
   StubGenerator g(code, all);
 }

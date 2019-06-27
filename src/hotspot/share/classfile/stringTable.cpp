@@ -58,8 +58,8 @@
 const double PREF_AVG_LIST_LEN = 2.0;
 // 2^24 is max size
 const size_t END_SIZE = 24;
-// If a chain gets to 32 something might be wrong
-const size_t REHASH_LEN = 32;
+// If a chain gets to 100 something might be wrong
+const size_t REHASH_LEN = 100;
 // If we have as many dead items as 50% of the number of bucket
 const double CLEAN_DEAD_HIGH_WATER_MARK = 0.5;
 
@@ -79,8 +79,7 @@ static CompactHashtable<
 
 // --------------------------------------------------------------------------
 
-typedef ConcurrentHashTable<WeakHandle<vm_string_table_data>,
-                            StringTableConfig, mtSymbol> StringTableHash;
+typedef ConcurrentHashTable<StringTableConfig, mtSymbol> StringTableHash;
 static StringTableHash* _local_table = NULL;
 
 volatile bool StringTable::_has_work = false;
@@ -101,11 +100,12 @@ uintx hash_string(const jchar* s, int len, bool useAlt) {
     java_lang_String::hash_code(s, len);
 }
 
-class StringTableConfig : public StringTableHash::BaseConfig {
+class StringTableConfig : public StackObj {
  private:
  public:
-  static uintx get_hash(WeakHandle<vm_string_table_data> const& value,
-                        bool* is_dead) {
+  typedef WeakHandle<vm_string_table_data> Value;
+
+  static uintx get_hash(Value const& value, bool* is_dead) {
     EXCEPTION_MARK;
     oop val_oop = value.peek();
     if (val_oop == NULL) {
@@ -124,15 +124,13 @@ class StringTableConfig : public StringTableHash::BaseConfig {
     return 0;
   }
   // We use default allocation/deallocation but counted
-  static void* allocate_node(size_t size,
-                             WeakHandle<vm_string_table_data> const& value) {
+  static void* allocate_node(size_t size, Value const& value) {
     StringTable::item_added();
-    return StringTableHash::BaseConfig::allocate_node(size, value);
+    return AllocateHeap(size, mtSymbol);
   }
-  static void free_node(void* memory,
-                        WeakHandle<vm_string_table_data> const& value) {
+  static void free_node(void* memory, Value const& value) {
     value.release();
-    StringTableHash::BaseConfig::free_node(memory, value);
+    FreeHeap(memory);
     StringTable::item_removed();
   }
 };
@@ -496,8 +494,9 @@ bool StringTable::do_rehash() {
     return false;
   }
 
-  // We use max size
-  StringTableHash* new_table = new StringTableHash(END_SIZE, END_SIZE, REHASH_LEN);
+  // We use current size, not max size.
+  size_t new_size = _local_table->get_size_log2(Thread::current());
+  StringTableHash* new_table = new StringTableHash(new_size, END_SIZE, REHASH_LEN);
   // Use alt hash from now on
   _alt_hash = true;
   if (!_local_table->try_move_nodes_to(Thread::current(), new_table)) {
