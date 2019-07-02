@@ -1523,7 +1523,9 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     // Call lrb-stub and wire up that path in slots 4
     Node* result_mem = NULL;
     Node* fwd = new_val;
-    call_lrb_stub(ctrl, fwd, lrb->in(ShenandoahLoadReferenceBarrierNode::LoadAddr), result_mem, raw_mem, phase);
+    VectorSet visited(Thread::current()->resource_area());
+    Node* addr = get_load_addr(phase, visited, lrb);
+    call_lrb_stub(ctrl, fwd, addr, result_mem, raw_mem, phase);
     region->init_req(_evac_path, ctrl);
     val_phi->init_req(_evac_path, fwd);
     raw_mem_phi->init_req(_evac_path, result_mem);
@@ -1723,6 +1725,61 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     phase->igvn().replace_node(barrier, pre_val);
   }
   assert(state->enqueue_barriers_count() == 0, "all enqueue barrier nodes should have been replaced");
+
+}
+
+Node* ShenandoahBarrierC2Support::get_load_addr(PhaseIdealLoop* phase, VectorSet& visited, Node* in) {
+  if (visited.test_set(in->_idx)) {
+    return NULL;
+  }
+  switch (in->Opcode()) {
+    case Op_Proj:
+      return get_load_addr(phase, visited, in->in(0));
+    case Op_CastPP:
+    case Op_CheckCastPP:
+    case Op_DecodeN:
+    case Op_EncodeP:
+      return get_load_addr(phase, visited, in->in(1));
+    case Op_LoadN:
+    case Op_LoadP:
+      return in->in(MemNode::Address);
+    case Op_CompareAndExchangeN:
+    case Op_CompareAndExchangeP:
+    case Op_GetAndSetN:
+    case Op_GetAndSetP:
+    case Op_ShenandoahCompareAndExchangeP:
+    case Op_ShenandoahCompareAndExchangeN:
+      // Those instructions would just have stored a different
+      // value into the field. No use to attempt to fix it at this point.
+      return phase->igvn().zerocon(T_OBJECT);
+    case Op_Phi: {
+      Node* addr = NULL;
+      for (uint i = 1; i < in->req(); i++) {
+        Node* addr1 = get_load_addr(phase, visited, in->in(i));
+        if (addr == NULL) {
+          addr = addr1;
+        }
+        if (addr != addr1) {
+          return phase->igvn().zerocon(T_OBJECT);
+        }
+      }
+      return addr;
+    }
+    case Op_ShenandoahLoadReferenceBarrier:
+      return get_load_addr(phase, visited, in->in(ShenandoahLoadReferenceBarrierNode::ValueIn));
+    case Op_CallDynamicJava:
+    case Op_CallLeaf:
+    case Op_CallStaticJava:
+    case Op_ConN:
+    case Op_ConP:
+      return phase->igvn().zerocon(T_OBJECT);
+    default:
+#ifdef ASSERT
+      in->dump();
+      ShouldNotReachHere();
+#endif
+      return phase->igvn().zerocon(T_OBJECT);
+  }
 
 }
 
@@ -2966,8 +3023,8 @@ void MemoryGraphFixer::fix_memory_uses(Node* mem, Node* replacement, Node* rep_p
   }
 }
 
-ShenandoahLoadReferenceBarrierNode::ShenandoahLoadReferenceBarrierNode(Node* ctrl, Node* obj, Node* load_addr)
-: Node(ctrl, obj, load_addr) {
+ShenandoahLoadReferenceBarrierNode::ShenandoahLoadReferenceBarrierNode(Node* ctrl, Node* obj)
+: Node(ctrl, obj) {
   ShenandoahBarrierSetC2::bsc2()->state()->add_load_reference_barrier(this);
 }
 

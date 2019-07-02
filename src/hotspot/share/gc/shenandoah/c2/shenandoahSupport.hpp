@@ -71,6 +71,7 @@ private:
   static void fix_ctrl(Node* barrier, Node* region, const MemoryGraphFixer& fixer, Unique_Node_List& uses, Unique_Node_List& uses_to_ignore, uint last, PhaseIdealLoop* phase);
   static IfNode* find_unswitching_candidate(const IdealLoopTree *loop, PhaseIdealLoop* phase);
 
+  static Node* get_load_addr(PhaseIdealLoop* phase, VectorSet& visited, Node* lrb);
 public:
   static bool is_dominator(Node* d_c, Node* n_c, Node* d, Node* n, PhaseIdealLoop* phase);
   static bool is_dominator_same_ctrl(Node* c, Node* d, Node* n, PhaseIdealLoop* phase);
@@ -227,15 +228,14 @@ class ShenandoahLoadReferenceBarrierNode : public Node {
 public:
   enum {
     Control,
-    ValueIn,
-    LoadAddr
+    ValueIn
   };
 
   enum Strength {
     NONE, WEAK, STRONG, NA
   };
 
-  ShenandoahLoadReferenceBarrierNode(Node* ctrl, Node* val, Node* load_addr);
+  ShenandoahLoadReferenceBarrierNode(Node* ctrl, Node* val);
 
   virtual int Opcode() const;
   virtual const Type* bottom_type() const;
