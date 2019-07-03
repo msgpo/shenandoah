@@ -1523,8 +1523,13 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     // Call lrb-stub and wire up that path in slots 4
     Node* result_mem = NULL;
     Node* fwd = new_val;
-    VectorSet visited(Thread::current()->resource_area());
-    Node* addr = get_load_addr(phase, visited, lrb);
+    Node* addr;
+    if (ShenandoahSelfFixing) {
+      VectorSet visited(Thread::current()->resource_area());
+      addr = get_load_addr(phase, visited, lrb);
+    } else {
+      addr = phase->igvn().zerocon(T_OBJECT);
+    }
     call_lrb_stub(ctrl, fwd, addr, result_mem, raw_mem, phase);
     region->init_req(_evac_path, ctrl);
     val_phi->init_req(_evac_path, fwd);
@@ -1767,6 +1772,8 @@ Node* ShenandoahBarrierC2Support::get_load_addr(PhaseIdealLoop* phase, VectorSet
     }
     case Op_ShenandoahLoadReferenceBarrier:
       return get_load_addr(phase, visited, in->in(ShenandoahLoadReferenceBarrierNode::ValueIn));
+    case Op_ShenandoahEnqueueBarrier:
+      return get_load_addr(phase, visited, in->in(1));
     case Op_CallDynamicJava:
     case Op_CallLeaf:
     case Op_CallStaticJava:

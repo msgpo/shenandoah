@@ -400,5 +400,9 @@
                                                                             \
   experimental(bool, ShenandoahLoopOptsAfterExpansion, true,                \
           "Attempt more loop opts after barrier expansion")                 \
+                                                                            \
+  experimental(bool, ShenandoahSelfFixing, true,                            \
+          "Load-reference-barrier also fixes references")                   \
+
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAH_GLOBALS_HPP
