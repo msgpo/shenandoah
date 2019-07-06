@@ -1779,6 +1779,7 @@ Node* ShenandoahBarrierC2Support::get_load_addr(PhaseIdealLoop* phase, VectorSet
     case Op_CallStaticJava:
     case Op_ConN:
     case Op_ConP:
+    case Op_Parm:
       return phase->igvn().zerocon(T_OBJECT);
     default:
 #ifdef ASSERT
