@@ -1530,6 +1530,31 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     } else {
       addr = phase->igvn().zerocon(T_OBJECT);
     }
+    if (addr->Opcode() == Op_AddP) {
+      Node* orig_base = addr->in(AddPNode::Base);
+      Node* base = new CheckCastPPNode(ctrl, orig_base, orig_base->bottom_type(), true);
+      phase->register_new_node(base, ctrl);
+      if (addr->in(AddPNode::Base) == addr->in((AddPNode::Address))) {
+        // Field access
+        addr = addr->clone();
+        addr->set_req(AddPNode::Base, base);
+        addr->set_req(AddPNode::Address, base);
+        phase->register_new_node(addr, ctrl);
+      } else {
+        Node* addr2 = addr->in(AddPNode::Address);
+        assert(addr2->Opcode() == Op_AddP, "expected");
+        assert(addr2->in(AddPNode::Base) == orig_base, "expected");
+        assert(addr2->in(AddPNode::Base) == addr2->in(AddPNode::Address), "expected");
+        addr2 = addr2->clone();
+        addr2->set_req(AddPNode::Base, base);
+        addr2->set_req(AddPNode::Address, base);
+        phase->register_new_node(addr2, ctrl);
+        addr = addr->clone();
+        addr->set_req(AddPNode::Base, base);
+        addr->set_req(AddPNode::Address, addr2);
+        phase->register_new_node(addr, ctrl);
+      }
+    }
     call_lrb_stub(ctrl, fwd, addr, result_mem, raw_mem, phase);
     region->init_req(_evac_path, ctrl);
     val_phi->init_req(_evac_path, fwd);
