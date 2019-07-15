@@ -1782,6 +1782,17 @@ Node* ShenandoahBarrierC2Support::get_load_addr(PhaseIdealLoop* phase, VectorSet
       // Those instructions would just have stored a different
       // value into the field. No use to attempt to fix it at this point.
       return phase->igvn().zerocon(T_OBJECT);
+    case Op_CMoveP:
+    case Op_CMoveN: {
+      Node* t = get_load_addr(phase, visited, in->in(CMoveNode::IfTrue));
+      Node* f = get_load_addr(phase, visited, in->in(CMoveNode::IfFalse));
+      // Handle unambiguous cases: single address reported on both branches.
+      if (t != NULL && f == NULL) return t;
+      if (t == NULL && f != NULL) return f;
+      if (t != NULL && t == f)    return t;
+      // Ambiguity.
+      return phase->igvn().zerocon(T_OBJECT);
+    }
     case Op_Phi: {
       Node* addr = NULL;
       for (uint i = 1; i < in->req(); i++) {
@@ -1808,8 +1819,7 @@ Node* ShenandoahBarrierC2Support::get_load_addr(PhaseIdealLoop* phase, VectorSet
       return phase->igvn().zerocon(T_OBJECT);
     default:
 #ifdef ASSERT
-      in->dump();
-      ShouldNotReachHere();
+      fatal("Unknown node in get_load_addr: %s", NodeClassNames[in->Opcode()]);
 #endif
       return phase->igvn().zerocon(T_OBJECT);
   }
