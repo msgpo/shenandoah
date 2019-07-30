@@ -1990,10 +1990,10 @@ void ShenandoahHeap::stw_unload_classes(bool full_gc) {
   MetaspaceUtils::verify_metrics();
 }
 
-// Process leftover weak oops: update them, if needed or assert they do not
-// need updating otherwise.
-// Weak processor API requires us to visit the oops, even if we are not doing
-// anything to them.
+// Weak roots are either pre-evacuated (final mark) or updated (final updaterefs),
+// so they should not have forwarded oops.
+// However, we do need to "null" dead oops in the roots, if can not be done
+// in concurrent cycles.
 void ShenandoahHeap::stw_process_weak_roots(bool full_gc) {
   ShenandoahGCPhase root_phase(full_gc ?
                                ShenandoahPhaseTimings::full_gc_purge :
@@ -2004,14 +2004,7 @@ void ShenandoahHeap::stw_process_weak_roots(bool full_gc) {
                                                ShenandoahPhaseTimings::purge_par;
   // Cleanup weak roots
   ShenandoahGCPhase phase(timing_phase);
-  if (has_forwarded_objects()) {
-    ShenandoahForwardedIsAliveClosure is_alive;
-    ShenandoahUpdateRefsClosure keep_alive;
-    ShenandoahParallelWeakRootsCleaningTask<ShenandoahForwardedIsAliveClosure, ShenandoahUpdateRefsClosure>
-      cleaning_task(&is_alive, &keep_alive, num_workers);
-    _workers->run_task(&cleaning_task);
-  } else {
-    ShenandoahIsAliveClosure is_alive;
+  ShenandoahIsAliveClosure is_alive;
 #ifdef ASSERT
   ShenandoahAssertNotForwardedClosure verify_cl;
   ShenandoahParallelWeakRootsCleaningTask<ShenandoahIsAliveClosure, ShenandoahAssertNotForwardedClosure>
@@ -2020,8 +2013,7 @@ void ShenandoahHeap::stw_process_weak_roots(bool full_gc) {
   ShenandoahParallelWeakRootsCleaningTask<ShenandoahIsAliveClosure, DoNothingClosure>
     cleaning_task(&is_alive, &do_nothing_cl, num_workers);
 #endif
-    _workers->run_task(&cleaning_task);
-  }
+  _workers->run_task(&cleaning_task);
 }
 
 void ShenandoahHeap::parallel_cleaning(bool full_gc) {
