@@ -1067,7 +1067,8 @@ void ShenandoahHeap::evacuate_and_update_roots() {
     // Include concurrent roots if current cycle can not process those roots concurrently
     ShenandoahRootEvacuator rp(workers()->active_workers(),
                                ShenandoahPhaseTimings::init_evac,
-                               !ShenandoahConcurrentRoots::should_do_concurrent_roots());
+                               !ShenandoahConcurrentRoots::should_do_concurrent_roots(),
+                               !ShenandoahConcurrentRoots::should_do_concurrent_nmethods());
     ShenandoahEvacuateUpdateRootsTask roots_task(&rp);
     workers()->run_task(&roots_task);
   }
@@ -1505,6 +1506,7 @@ void ShenandoahHeap::op_final_mark() {
       set_has_forwarded_objects(true);
 
       if (!is_degenerated_gc_in_progress()) {
+        prepare_concurrent_unloading();
         evacuate_and_update_roots();
       }
 
@@ -1513,13 +1515,16 @@ void ShenandoahHeap::op_final_mark() {
       }
 
       if (ShenandoahVerify) {
+        ShenandoahRootVerifier::RootTypes types = ShenandoahRootVerifier::None;
         if (ShenandoahConcurrentRoots::should_do_concurrent_roots()) {
-          ShenandoahRootVerifier::RootTypes types = ShenandoahRootVerifier::combine(ShenandoahRootVerifier::JNIHandleRoots, ShenandoahRootVerifier::WeakRoots);
+          types = ShenandoahRootVerifier::combine(ShenandoahRootVerifier::JNIHandleRoots, ShenandoahRootVerifier::WeakRoots);
           types = ShenandoahRootVerifier::combine(types, ShenandoahRootVerifier::CLDGRoots);
-          verifier()->verify_roots_no_forwarded_except(types);
-        } else {
-          verifier()->verify_roots_no_forwarded();
         }
+
+        if (ShenandoahConcurrentRoots::should_do_concurrent_nmethods()) {
+          types = ShenandoahRootVerifier::combine(types, ShenandoahRootVerifier::CodeRoots);
+        }
+        verifier()->verify_roots_no_forwarded_except(types);
         verifier()->verify_during_evacuation();
       }
     } else {
@@ -1610,10 +1615,15 @@ public:
 };
 
 void ShenandoahHeap::op_roots() {
-  if (is_evacuation_in_progress() &&
-      ShenandoahConcurrentRoots::should_do_concurrent_roots()) {
-    ShenandoahConcurrentRootsEvacUpdateTask task;
-    workers()->run_task(&task);
+  if (is_evacuation_in_progress()) {
+    if (ShenandoahConcurrentRoots::should_do_concurrent_nmethods()) {
+      _unloader.unload();
+    }
+
+    if (ShenandoahConcurrentRoots::should_do_concurrent_roots()) {
+      ShenandoahConcurrentRootsEvacUpdateTask task;
+      workers()->run_task(&task);
+    }
   }
 }
 
@@ -1967,6 +1977,7 @@ void ShenandoahHeap::stw_unload_classes(bool full_gc) {
                             ShenandoahPhaseTimings::full_gc_purge_class_unload :
                             ShenandoahPhaseTimings::purge_class_unload);
     purged_class = SystemDictionary::do_unloading(gc_timer());
+    _unloader.set_unloading_occurred(purged_class);
   }
 
   {
@@ -2089,6 +2100,10 @@ void ShenandoahHeap::unregister_nmethod(nmethod* nm) {
   ShenandoahCodeRoots::unregister_nmethod(nm);
 }
 
+void ShenandoahHeap::flush_nmethod(nmethod* nm) {
+  ShenandoahCodeRoots::flush_nmethod(nm);
+}
+
 oop ShenandoahHeap::pin_object(JavaThread* thr, oop o) {
   ShenandoahHeapLocker locker(lock());
   heap_region_containing(o)->make_pinned();
@@ -2102,6 +2117,20 @@ void ShenandoahHeap::unpin_object(JavaThread* thr, oop o) {
 
 GCTimer* ShenandoahHeap::gc_timer() const {
   return _gc_timer;
+}
+
+void ShenandoahHeap::prepare_concurrent_unloading() {
+  assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
+
+  if (ShenandoahConcurrentRoots::should_do_concurrent_nmethods()) {
+    ShenandoahCodeRoots::prepare_concurrent_unloading();
+    _unloader.prepare();
+  }
+}
+
+void ShenandoahHeap::finish_concurrent_unloading() {
+  assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
+  _unloader.finish();
 }
 
 #ifdef ASSERT
@@ -2219,6 +2248,10 @@ void ShenandoahHeap::op_init_updaterefs() {
 void ShenandoahHeap::op_final_updaterefs() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at safepoint");
 
+  if (ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+    finish_concurrent_unloading();
+  }
+
   // Check if there is left-over work, and finish it
   if (_update_refs_iterator.has_next()) {
     ShenandoahGCPhase final_work(ShenandoahPhaseTimings::final_update_refs_finish_work);
@@ -2236,7 +2269,7 @@ void ShenandoahHeap::op_final_updaterefs() {
   assert(!cancelled_gc(), "Should have been done right before");
 
   if (ShenandoahVerify && !is_degenerated_gc_in_progress()) {
-    verifier()->verify_roots_no_forwarded_except(ShenandoahRootVerifier::ThreadRoots);
+    verifier()->verify_roots_in_to_space_except(ShenandoahRootVerifier::ThreadRoots);
   }
 
   if (is_degenerated_gc_in_progress()) {

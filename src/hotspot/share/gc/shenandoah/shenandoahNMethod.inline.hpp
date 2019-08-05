@@ -24,15 +24,68 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHNMETHOD_INLINE_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHNMETHOD_INLINE_HPP
 
+#include "gc/shared/barrierSet.hpp"
+#include "gc/shared/barrierSetNMethod.hpp"
+#include "gc/shenandoah/shenandoahConcurrentRoots.hpp"
 #include "gc/shenandoah/shenandoahNMethod.hpp"
 
+nmethod* ShenandoahNMethod::nm() const {
+  return _nm;
+}
+
+ShenandoahReentrantLock* ShenandoahNMethod::lock() {
+  return &_lock;
+}
+
+int ShenandoahNMethod::oop_count() const {
+  return _oops_count + static_cast<int>(nm()->oops_end() - nm()->oops_begin());
+}
+
+bool ShenandoahNMethod::has_oops() const {
+  return oop_count() > 0;
+}
+
+void ShenandoahNMethod::mark_unregistered() {
+  _unregistered = true;
+}
+
+bool ShenandoahNMethod::is_unregistered() const {
+  return _unregistered;
+}
+
+void ShenandoahNMethod::disarm_nmethod(nmethod* nm) {
+ if (!ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+   return;
+ }
+
+ BarrierSetNMethod* const bs = BarrierSet::barrier_set()->barrier_set_nmethod();
+ assert(bs != NULL, "Sanity");
+ bs->disarm(nm);
+}
+
+ShenandoahNMethod* ShenandoahNMethod::gc_data(nmethod* nm) {
+  return nm->gc_data<ShenandoahNMethod>();
+}
+
+void ShenandoahNMethod::attach_gc_data(nmethod* nm, ShenandoahNMethod* gc_data) {
+  nm->set_gc_data<ShenandoahNMethod>(gc_data);
+}
+
+ShenandoahReentrantLock* ShenandoahNMethod::lock_for_nmethod(nmethod* nm) {
+  return gc_data(nm)->lock();
+}
+
+bool ShenandoahNMethodTable::iteration_in_progress() const {
+  return _iteration_in_progress;
+}
+
 template<bool CSET_FILTER>
-void ShenandoahNMethodTable::parallel_blobs_do(CodeBlobClosure *f) {
+void ShenandoahNMethodTableSnapshot::parallel_blobs_do(CodeBlobClosure *f) {
   size_t stride = 256; // educated guess
 
   ShenandoahNMethod** const list = _array;
 
-  size_t max = (size_t)_index;
+  size_t max = (size_t)_length;
   while (_claimed < max) {
     size_t cur = Atomic::add(stride, &_claimed) - stride;
     size_t start = cur;
@@ -42,6 +95,9 @@ void ShenandoahNMethodTable::parallel_blobs_do(CodeBlobClosure *f) {
     for (size_t idx = start; idx < end; idx++) {
       ShenandoahNMethod* nmr = list[idx];
       assert(nmr != NULL, "Sanity");
+      if (nmr->is_unregistered()) {
+        continue;
+      }
 
       nmr->assert_alive_and_correct();
 

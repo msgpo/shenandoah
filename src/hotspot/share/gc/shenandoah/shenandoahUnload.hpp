@@ -21,21 +21,29 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTROOTS_HPP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTROOTS_HPP
+#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHCLASSUNLOAD_HPP
+#define SHARE_GC_SHENANDOAH_SHENANDOAHCLASSUNLOAD_HPP
 
 #include "memory/allocation.hpp"
 
-class ShenandoahConcurrentRoots : public AllStatic {
-public:
-  // Can GC settings allow concurrent root processing
-  static bool can_do_concurrent_roots();
-  // If current GC cycle can process roots concurrently
-  static bool should_do_concurrent_roots();
+class ShenandoahHeap;
 
-  static bool can_do_concurrent_nmethods();
-  static bool should_do_concurrent_nmethods();
+class ShenandoahUnload {
+private:
+  bool  _unloading_occurred;
+
+public:
+  ShenandoahUnload();
+  void prepare();
+  void unload();
+  void finish();
+
+  void set_unloading_occurred(bool b) {
+    _unloading_occurred = b;
+  }
+private:
+  void unlink();
+  void purge();
 };
 
-
-#endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTROOTS_HPP
+#endif // SHARE_GC_SHENANDOAH_SHENANDOAHCLASSUNLOAD_HPP

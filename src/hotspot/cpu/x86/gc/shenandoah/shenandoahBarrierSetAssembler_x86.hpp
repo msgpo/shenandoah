@@ -67,6 +67,8 @@ private:
   void save_vector_registers(MacroAssembler* masm);
   void restore_vector_registers(MacroAssembler* masm);
 
+  void peek_weak_handle(MacroAssembler* masm, Register result, Register tmp);
+
 public:
   static address shenandoah_lrb();
 
@@ -93,6 +95,8 @@ public:
                         Address dst, Register val, Register tmp1, Register tmp2);
   virtual void try_resolve_jobject_in_native(MacroAssembler* masm, Register jni_env,
                                              Register obj, Register tmp, Label& slowpath);
+
+  virtual void c2i_entry_barrier(MacroAssembler* masm);
 
   virtual void barrier_stubs_init();
 

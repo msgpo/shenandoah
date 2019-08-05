@@ -21,21 +21,28 @@
  *
  */
 
-#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTROOTS_HPP
-#define SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTROOTS_HPP
+#ifndef SHARE_GC_SHENANDOAH_SHENANDOAHBARRIERSETNMETHOD_HPP
+#define SHARE_GC_SHENANDOAH_SHENANDOAHBARRIERSETNMETHOD_HPP
 
+#include "gc/shared/barrierSetNMethod.hpp"
 #include "memory/allocation.hpp"
 
-class ShenandoahConcurrentRoots : public AllStatic {
-public:
-  // Can GC settings allow concurrent root processing
-  static bool can_do_concurrent_roots();
-  // If current GC cycle can process roots concurrently
-  static bool should_do_concurrent_roots();
+class nmethod;
+class ShenandoahHeap;
 
-  static bool can_do_concurrent_nmethods();
-  static bool should_do_concurrent_nmethods();
+class ShenandoahBarrierSetNMethod : public BarrierSetNMethod {
+private:
+  ShenandoahHeap* _heap;
+
+protected:
+  virtual int disarmed_value() const;
+  virtual bool nmethod_entry_barrier(nmethod* nm);
+
+public:
+  ShenandoahBarrierSetNMethod(ShenandoahHeap* heap) : _heap(heap) {
+  }
+
+  virtual ByteSize thread_disarmed_offset() const;
 };
 
-
-#endif // SHARE_GC_SHENANDOAH_SHENANDOAHCONCURRENTROOTS_HPP
+#endif // SHARE_GC_SHENANDOAH_SHENANDOAHBARRIERSETNMETHOD_HPP

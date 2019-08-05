@@ -36,34 +36,39 @@
 // because it would then require handling these tuples as the new class of roots.
 class ShenandoahNMethod : public CHeapObj<mtGC> {
 private:
-  nmethod* _nm;
-  oop**    _oops;
-  int      _oops_count;
-  bool     _has_non_immed_oops;
+  nmethod* const          _nm;
+  oop**                   _oops;
+  int                     _oops_count;
+  bool                    _has_non_immed_oops;
+  bool                    _unregistered;
+  ShenandoahReentrantLock _lock;
 
 public:
   ShenandoahNMethod(nmethod *nm, GrowableArray<oop*>& oops, bool has_non_immed_oops);
   ~ShenandoahNMethod();
 
-  nmethod* nm() const {
-    return _nm;
-  }
-
+  inline nmethod* nm() const;
+  inline ShenandoahReentrantLock* lock();
   void oops_do(OopClosure* oops, bool fix_relocations = false);
-
   // Update oops when the nmethod is re-registered
   void update();
 
   bool has_cset_oops(ShenandoahHeap* heap);
-  int oop_count() const {
-    return _oops_count + static_cast<int>(nm()->oops_end() - nm()->oops_begin());
-  }
 
-  bool has_oops() const {
-    return oop_count() > 0;
-  }
+  inline int oop_count() const;
+  inline bool has_oops() const;
+
+  inline void mark_unregistered();
+  inline bool is_unregistered() const;
 
   static ShenandoahNMethod* for_nmethod(nmethod* nm);
+  static inline ShenandoahReentrantLock* lock_for_nmethod(nmethod* nm);
+
+  static void heal_nmethod(nmethod* nm);
+  static inline void disarm_nmethod(nmethod* nm);
+
+  static inline ShenandoahNMethod* gc_data(nmethod* nm);
+  static inline void attach_gc_data(nmethod* nm, ShenandoahNMethod* gc_data);
 
   void assert_alive_and_correct() NOT_DEBUG_RETURN;
   void assert_same_oops(bool allow_dead = false) NOT_DEBUG_RETURN;
@@ -74,8 +79,32 @@ private:
   static void detect_reloc_oops(nmethod* nm, GrowableArray<oop*>& oops, bool& _has_non_immed_oops);
 };
 
+class ShenandoahNMethodTable;
+
+// An opaque snapshot of current nmethod table for iteration
+class ShenandoahNMethodTableSnapshot : public CHeapObj<mtGC> {
+  friend class ShenandoahNMethodTable;
+private:
+  ShenandoahHeap* const       _heap;
+  ShenandoahNMethodTable*     _table;
+  ShenandoahNMethod** const   _array;
+  const int                   _length;
+
+  DEFINE_PAD_MINUS_SIZE(0, DEFAULT_CACHE_LINE_SIZE, sizeof(volatile size_t));
+  volatile size_t       _claimed;
+  DEFINE_PAD_MINUS_SIZE(1, DEFAULT_CACHE_LINE_SIZE, 0);
+
+public:
+  ShenandoahNMethodTableSnapshot(ShenandoahNMethodTable* table);
+
+  template<bool CSET_FILTER>
+  void parallel_blobs_do(CodeBlobClosure *f);
+
+  void concurrent_nmethods_do(NMethodClosure* cl);
+};
 
 class ShenandoahNMethodTable : public CHeapObj<mtGC> {
+  friend class ShenandoahNMethodTableSnapshot;
 private:
   enum {
     minSize = 1024
@@ -86,11 +115,7 @@ private:
   int                   _size;
   int                   _index;
   ShenandoahLock        _lock;
-  DEBUG_ONLY(bool       _iteration_in_progress;)
-
-  DEFINE_PAD_MINUS_SIZE(0, DEFAULT_CACHE_LINE_SIZE, sizeof(volatile size_t));
-  volatile size_t       _claimed;
-  DEFINE_PAD_MINUS_SIZE(1, DEFAULT_CACHE_LINE_SIZE, 0);
+  bool                  _iteration_in_progress;
 
 public:
   ShenandoahNMethodTable();
@@ -98,16 +123,14 @@ public:
 
   void register_nmethod(nmethod* nm);
   void unregister_nmethod(nmethod* nm);
+  void flush_nmethod(nmethod* nm);
 
   bool contain(nmethod* nm) const;
   int length() const { return _index; }
 
   // Table iteration support
-  void prepare_for_iteration();
-  void finish_iteration();
-
-  template<bool CSET_FILTER>
-  void parallel_blobs_do(CodeBlobClosure *f);
+  ShenandoahNMethodTableSnapshot* snapshot_for_iteration();
+  void finish_iteration(ShenandoahNMethodTableSnapshot* snapshot);
 
   void assert_nmethods_alive_and_correct() NOT_DEBUG_RETURN;
 private:
@@ -124,9 +147,26 @@ private:
   void remove(int index);
   void append(ShenandoahNMethod* snm);
 
+  inline bool iteration_in_progress() const;
+  void wait_until_concurrent_iteration_done();
+
   // Logging support
   void log_register_nmethod(nmethod* nm);
   void log_unregister_nmethod(nmethod* nm);
+  void log_flush_nmethod(nmethod* nm);
+};
+
+class ShenandoahConcurrentNMethodIterator {
+private:
+  ShenandoahNMethodTable*         const _table;
+  ShenandoahNMethodTableSnapshot*       _table_snapshot;
+
+public:
+  ShenandoahConcurrentNMethodIterator(ShenandoahNMethodTable* table);
+
+  void nmethods_do_begin();
+  void nmethods_do(NMethodClosure* cl);
+  void nmethods_do_end();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHNMETHOD_HPP

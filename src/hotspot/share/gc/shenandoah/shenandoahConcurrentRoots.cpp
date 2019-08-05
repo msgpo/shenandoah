@@ -28,7 +28,7 @@
 
 bool ShenandoahConcurrentRoots::can_do_concurrent_roots() {
   // Don't support traversal GC at this moment
-  return !ShenandoahHeap::heap()->is_concurrent_traversal_in_progress();
+  return !ShenandoahHeap::heap()->is_traversal_mode();
 }
 
 bool ShenandoahConcurrentRoots::should_do_concurrent_roots() {
@@ -36,5 +36,23 @@ bool ShenandoahConcurrentRoots::should_do_concurrent_roots() {
   bool stw_gc_in_progress = heap->is_full_gc_in_progress() ||
                             heap->is_degenerated_gc_in_progress();
   return can_do_concurrent_roots() &&
+         !stw_gc_in_progress;
+}
+
+bool ShenandoahConcurrentRoots::can_do_concurrent_nmethods() {
+#if defined(_LP64) && defined(X86) && !defined(SOLARIS)
+  return ShenandoahCodeRootsStyle == 2 &&
+         ClassUnloading &&
+         strcmp(ShenandoahGCMode, "traversal") != 0;
+#else
+  return false;
+#endif
+}
+
+bool ShenandoahConcurrentRoots::should_do_concurrent_nmethods() {
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  bool stw_gc_in_progress = heap->is_full_gc_in_progress() ||
+                            heap->is_degenerated_gc_in_progress();
+  return can_do_concurrent_nmethods() &&
          !stw_gc_in_progress;
 }

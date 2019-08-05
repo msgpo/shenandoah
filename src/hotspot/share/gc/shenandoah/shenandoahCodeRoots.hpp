@@ -68,6 +68,7 @@ class ShenandoahCodeRootsIterator {
 protected:
   ShenandoahParallelCodeCacheIterator _par_iterator;
   ShenandoahSharedFlag _seq_claimed;
+  ShenandoahNMethodTableSnapshot* _table_snapshot;
 
 protected:
   ShenandoahCodeRootsIterator();
@@ -100,12 +101,20 @@ public:
   static void initialize();
   static void register_nmethod(nmethod* nm);
   static void unregister_nmethod(nmethod* nm);
+  static void flush_nmethod(nmethod* nm);
 
   static ShenandoahNMethodTable* table() {
     return _nmethod_table;
   }
+
+  // Concurrent nmethod unloading support
+  static void unlink(WorkGang* workers, bool unloading_occurred);
+  static void purge(WorkGang* workers);
+  static void prepare_concurrent_unloading();
+  static int  disarmed_value() { return _disarmed_value; }
 private:
   static ShenandoahNMethodTable* _nmethod_table;
+  static int                     _disarmed_value;
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHCODEROOTS_HPP

@@ -32,6 +32,7 @@
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
+#include "gc/shenandoah/shenandoahUnload.hpp"
 #include "services/memoryManager.hpp"
 
 class ConcurrentGCTimer;
@@ -507,6 +508,7 @@ public:
 //
 private:
   ShenandoahSharedFlag _unload_classes;
+  ShenandoahUnload     _unloader;
 
 public:
   void set_unload_classes(bool uc);
@@ -518,6 +520,10 @@ public:
 private:
   void stw_unload_classes(bool full_gc);
   void stw_process_weak_roots(bool full_gc);
+
+  // Prepare and finish concurrent unloading
+  void prepare_concurrent_unloading();
+  void finish_concurrent_unloading();
 
 // ---------- Generic interface hooks
 // Minor things that super-interface expects us to implement to play nice with
@@ -555,7 +561,7 @@ public:
 public:
   void register_nmethod(nmethod* nm);
   void unregister_nmethod(nmethod* nm);
-  void flush_nmethod(nmethod* nm) {}
+  void flush_nmethod(nmethod* nm);
   void verify_nmethod(nmethod* nm) {}
 
 // ---------- Pinning hooks

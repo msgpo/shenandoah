@@ -25,7 +25,9 @@
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
+#include "gc/shenandoah/shenandoahBarrierSetNMethod.hpp"
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
+#include "gc/shenandoah/shenandoahConcurrentRoots.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahTraversalGC.hpp"
@@ -68,11 +70,19 @@ public:
   virtual void do_oop(narrowOop* p) { do_oop_work(p); }
 };
 
+static BarrierSetNMethod* make_barrier_set_nmethod(ShenandoahHeap* heap) {
+  // NMethod barriers are only used when concurrent nmethod unloading is enabled
+  if (!ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+    return NULL;
+  }
+  return new ShenandoahBarrierSetNMethod(heap);
+}
+
 ShenandoahBarrierSet::ShenandoahBarrierSet(ShenandoahHeap* heap) :
   BarrierSet(make_barrier_set_assembler<ShenandoahBarrierSetAssembler>(),
              make_barrier_set_c1<ShenandoahBarrierSetC1>(),
              make_barrier_set_c2<ShenandoahBarrierSetC2>(),
-             NULL /* barrier_set_nmethod */,
+             make_barrier_set_nmethod(heap),
              BarrierSet::FakeRtti(BarrierSet::ShenandoahBarrierSet)),
   _heap(heap),
   _satb_mark_queue_set()
