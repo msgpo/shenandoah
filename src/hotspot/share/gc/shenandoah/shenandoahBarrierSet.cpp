@@ -72,7 +72,7 @@ public:
 
 static BarrierSetNMethod* make_barrier_set_nmethod(ShenandoahHeap* heap) {
   // NMethod barriers are only used when concurrent nmethod unloading is enabled
-  if (!ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+  if (!ShenandoahConcurrentRoots::can_do_concurrent_class_unloading()) {
     return NULL;
   }
   return new ShenandoahBarrierSetNMethod(heap);

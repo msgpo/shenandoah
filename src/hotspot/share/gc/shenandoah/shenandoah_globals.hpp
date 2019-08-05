@@ -86,7 +86,7 @@
           "References get processed at every Nth GC cycle. Set to zero "    \
           "to disable reference processing.")                               \
                                                                             \
-  experimental(uintx, ShenandoahUnloadClassesFrequency, 5,                  \
+  experimental(uintx, ShenandoahUnloadClassesFrequency, 1,                  \
           "How often should classes get unloaded. "                         \
           "Class unloading is performed at every Nth GC cycle. "            \
           "Set to zero to disable class unloading during concurrent GC.")   \

@@ -33,7 +33,7 @@
 void ShenandoahNormalMode::initialize_flags() const {
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
-  if (ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+  if (ShenandoahConcurrentRoots::can_do_concurrent_class_unloading()) {
     SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahSuspendibleWorkers);
   }
 

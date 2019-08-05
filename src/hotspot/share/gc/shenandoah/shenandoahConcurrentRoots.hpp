@@ -33,8 +33,10 @@ public:
   // If current GC cycle can process roots concurrently
   static bool should_do_concurrent_roots();
 
-  static bool can_do_concurrent_nmethods();
-  static bool should_do_concurrent_nmethods();
+  // If GC settings allow concurrent class unloading
+  static bool can_do_concurrent_class_unloading();
+  // If current GC cycle can unload classes concurrently
+  static bool should_do_concurrent_class_unloading();
 };
 
 

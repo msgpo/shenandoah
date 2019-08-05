@@ -29,18 +29,11 @@
 class ShenandoahHeap;
 
 class ShenandoahUnload {
-private:
-  bool  _unloading_occurred;
-
 public:
   ShenandoahUnload();
   void prepare();
   void unload();
   void finish();
-
-  void set_unloading_occurred(bool b) {
-    _unloading_occurred = b;
-  }
 private:
   void unlink();
   void purge();

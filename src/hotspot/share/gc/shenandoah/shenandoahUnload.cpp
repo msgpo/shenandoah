@@ -117,8 +117,8 @@ public:
   }
 };
 
-ShenandoahUnload::ShenandoahUnload() : _unloading_occurred(false) {
-  if (ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+ShenandoahUnload::ShenandoahUnload() {
+  if (ShenandoahConcurrentRoots::can_do_concurrent_class_unloading()) {
     static ShenandoahIsUnloadingBehaviour is_unloading_behaviour;
     IsUnloadingBehaviour::set_current(&is_unloading_behaviour);
 
@@ -129,13 +129,22 @@ ShenandoahUnload::ShenandoahUnload() : _unloading_occurred(false) {
 
 void ShenandoahUnload::prepare() {
   assert(SafepointSynchronize::is_at_safepoint(), "Should be at safepoint");
-  assert(ShenandoahConcurrentRoots::can_do_concurrent_nmethods(), "Sanity");
+  assert(ShenandoahConcurrentRoots::can_do_concurrent_class_unloading(), "Sanity");
+  CodeCache::increment_unloading_cycle();
   DependencyContext::cleaning_start();
 }
 
 void ShenandoahUnload::unlink() {
   SuspendibleThreadSetJoiner sts;
-  ShenandoahCodeRoots::unlink(ShenandoahHeap::heap()->workers(), _unloading_occurred);
+  bool unloading_occurred;
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
+  {
+    MutexLocker cldg_ml(ClassLoaderDataGraph_lock);
+    unloading_occurred = SystemDictionary::do_unloading(heap->gc_timer());
+  }
+
+  Klass::clean_weak_klass_links(unloading_occurred);
+  ShenandoahCodeRoots::unlink(ShenandoahHeap::heap()->workers(), unloading_occurred);
   DependencyContext::cleaning_end();
 }
 
@@ -143,6 +152,8 @@ void ShenandoahUnload::purge() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   SuspendibleThreadSetJoiner sts;
   ShenandoahCodeRoots::purge(heap->workers());
+
+  ClassLoaderDataGraph::purge();
   CodeCache::purge_exception_caches();
 }
 
@@ -152,7 +163,7 @@ public:
 };
 
 void ShenandoahUnload::unload() {
-  assert(ShenandoahConcurrentRoots::can_do_concurrent_nmethods(), "Why we here?");
+  assert(ShenandoahConcurrentRoots::can_do_concurrent_class_unloading(), "Why we here?");
   if (!ShenandoahHeap::heap()->is_evacuation_in_progress()) {
     return;
   }
@@ -169,4 +180,6 @@ void ShenandoahUnload::unload() {
 }
 
 void ShenandoahUnload::finish() {
+  MetaspaceGC::compute_new_size();
+  MetaspaceUtils::verify_metrics();
 }

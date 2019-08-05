@@ -267,7 +267,7 @@ template <typename IsAlive, typename KeepAlive>
 void ShenandoahRootUpdater::roots_do(uint worker_id, IsAlive* is_alive, KeepAlive* keep_alive) {
   CodeBlobToOopClosure update_blobs(keep_alive, CodeBlobToOopClosure::FixRelocations);
   ShenandoahCodeBlobAndDisarmClosure blobs_and_disarm_Cl(keep_alive);
-  CodeBlobToOopClosure* codes_cl = ShenandoahConcurrentRoots::can_do_concurrent_nmethods() ?
+  CodeBlobToOopClosure* codes_cl = ShenandoahConcurrentRoots::can_do_concurrent_class_unloading() ?
                                   static_cast<CodeBlobToOopClosure*>(&blobs_and_disarm_Cl) :
                                   static_cast<CodeBlobToOopClosure*>(&update_blobs);
 
@@ -275,14 +275,13 @@ void ShenandoahRootUpdater::roots_do(uint worker_id, IsAlive* is_alive, KeepAliv
 
   _serial_roots.oops_do(keep_alive, worker_id);
   _jni_roots.oops_do(keep_alive, worker_id);
-
   _cld_roots.cld_do(&clds, worker_id);
 
   if(_update_code_cache) {
     _code_roots.code_blobs_do(codes_cl, worker_id);
     _thread_roots.oops_do(keep_alive, NULL, worker_id);
   } else {
-    if (ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+    if (ShenandoahConcurrentRoots::can_do_concurrent_class_unloading()) {
       _thread_roots.oops_do(keep_alive, codes_cl, worker_id);
     } else {
       _thread_roots.oops_do(keep_alive, NULL, worker_id);

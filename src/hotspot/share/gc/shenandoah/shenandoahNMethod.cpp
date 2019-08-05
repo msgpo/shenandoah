@@ -161,7 +161,7 @@ ShenandoahNMethod* ShenandoahNMethod::for_nmethod(nmethod* nm) {
   detect_reloc_oops(nm, oops, non_immediate_oops);
 
   // No embedded oops
-  if(!ShenandoahConcurrentRoots::can_do_concurrent_nmethods() &&
+  if(!ShenandoahConcurrentRoots::can_do_concurrent_class_unloading() &&
     oops.is_empty() && nm->oops_begin() >= nm->oops_end()) {
     return NULL;
   }
@@ -273,8 +273,8 @@ void ShenandoahNMethodTable::register_nmethod(nmethod* nm) {
   } else {
     data = ShenandoahNMethod::for_nmethod(nm);
     if (data == NULL) {
-      assert(!ShenandoahConcurrentRoots::can_do_concurrent_nmethods(),
-             "Only possible when concurrent nmethod unloading is off");
+      assert(!ShenandoahConcurrentRoots::can_do_concurrent_class_unloading(),
+             "Only possible when concurrent class unloading is off");
       return;
     }
     ShenandoahNMethod::attach_gc_data(nm, data);
@@ -291,8 +291,8 @@ void ShenandoahNMethodTable::unregister_nmethod(nmethod* nm) {
 
   ShenandoahNMethod* data = ShenandoahNMethod::gc_data(nm);
   if (data == NULL) {
-    assert(!ShenandoahConcurrentRoots::can_do_concurrent_nmethods(),
-           "Only possible when concurrent nmethod unloading is off");
+    assert(!ShenandoahConcurrentRoots::can_do_concurrent_class_unloading(),
+           "Only possible when concurrent class unloading is off");
     ShenandoahNMethod::assert_no_oops(nm, true /*allow_dead*/);
     return;
   }
@@ -312,8 +312,8 @@ void ShenandoahNMethodTable::flush_nmethod(nmethod* nm) {
   assert(CodeCache_lock->owned_by_self(), "Must have CodeCache_lock held");
   assert(Thread::current()->is_Code_cache_sweeper_thread(), "Must from Sweep thread");
   ShenandoahNMethod* data = ShenandoahNMethod::gc_data(nm);
-  assert(data != NULL || !ShenandoahConcurrentRoots::can_do_concurrent_nmethods(),
-         "Only possible when concurrent nmethod unloading is off");
+  assert(data != NULL || !ShenandoahConcurrentRoots::can_do_concurrent_class_unloading(),
+         "Only possible when concurrent class unloading is off");
   if (data == NULL) {
     ShenandoahNMethod::assert_no_oops(nm, true /*allow_dead*/);
     return;
@@ -498,7 +498,8 @@ ShenandoahConcurrentNMethodIterator::ShenandoahConcurrentNMethodIterator(Shenand
 
 void ShenandoahConcurrentNMethodIterator::nmethods_do_begin() {
   assert(CodeCache_lock->owned_by_self(), "Lock must be held");
-  assert(ShenandoahConcurrentRoots::can_do_concurrent_nmethods(), "Only for concurrent class unloading");
+  assert(ShenandoahConcurrentRoots::can_do_concurrent_class_unloading(),
+         "Only for concurrent class unloading");
   _table_snapshot = _table->snapshot_for_iteration();
 }
 
@@ -509,7 +510,8 @@ void ShenandoahConcurrentNMethodIterator::nmethods_do(NMethodClosure* cl) {
 
 void ShenandoahConcurrentNMethodIterator::nmethods_do_end() {
   assert(CodeCache_lock->owned_by_self(), "Lock must be held");
-  assert(ShenandoahConcurrentRoots::can_do_concurrent_nmethods(), "Only for concurrent class unloading");
+  assert(ShenandoahConcurrentRoots::can_do_concurrent_class_unloading(),
+         "Only for concurrent class unloading");
   _table->finish_iteration(_table_snapshot);
   CodeCache_lock->notify_all();
 }

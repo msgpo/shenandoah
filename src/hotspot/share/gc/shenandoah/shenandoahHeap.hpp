@@ -296,6 +296,7 @@ public:
   inline bool is_concurrent_traversal_in_progress() const;
   inline bool has_forwarded_objects() const;
   inline bool is_gc_in_progress_mask(uint mask) const;
+  inline bool is_stw_gc_in_progress() const;
 
 // ---------- GC cancellation and degeneration machinery
 //

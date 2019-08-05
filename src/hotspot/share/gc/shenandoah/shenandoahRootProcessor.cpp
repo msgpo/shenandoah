@@ -174,7 +174,7 @@ ShenandoahRootEvacuator::ShenandoahRootEvacuator(uint n_workers,
 void ShenandoahRootEvacuator::roots_do(uint worker_id, OopClosure* oops) {
   MarkingCodeBlobClosure blobsCl(oops, CodeBlobToOopClosure::FixRelocations);
   ShenandoahCodeBlobAndDisarmClosure blobs_and_disarm_Cl(oops);
-  CodeBlobToOopClosure* codes_cl = ShenandoahConcurrentRoots::can_do_concurrent_nmethods() ?
+  CodeBlobToOopClosure* codes_cl = ShenandoahConcurrentRoots::can_do_concurrent_class_unloading() ?
                                    static_cast<CodeBlobToOopClosure*>(&blobs_and_disarm_Cl) :
                                    static_cast<CodeBlobToOopClosure*>(&blobsCl);
   AlwaysTrueClosure always_true;
@@ -213,7 +213,7 @@ ShenandoahRootAdjuster::ShenandoahRootAdjuster(uint n_workers, ShenandoahPhaseTi
 void ShenandoahRootAdjuster::roots_do(uint worker_id, OopClosure* oops) {
   CodeBlobToOopClosure code_blob_cl(oops, CodeBlobToOopClosure::FixRelocations);
   ShenandoahCodeBlobAndDisarmClosure blobs_and_disarm_Cl(oops);
-  CodeBlobToOopClosure* adjust_code_closure = ShenandoahConcurrentRoots::can_do_concurrent_nmethods() ?
+  CodeBlobToOopClosure* adjust_code_closure = ShenandoahConcurrentRoots::can_do_concurrent_class_unloading() ?
                                               static_cast<CodeBlobToOopClosure*>(&blobs_and_disarm_Cl) :
                                               static_cast<CodeBlobToOopClosure*>(&code_blob_cl);
   CLDToOopClosure adjust_cld_closure(oops, ClassLoaderData::_claim_strong);

@@ -54,7 +54,7 @@ bool ShenandoahNMethod::is_unregistered() const {
 }
 
 void ShenandoahNMethod::disarm_nmethod(nmethod* nm) {
- if (!ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
+ if (!ShenandoahConcurrentRoots::can_do_concurrent_class_unloading()) {
    return;
  }
 

@@ -1068,7 +1068,7 @@ void ShenandoahHeap::evacuate_and_update_roots() {
     ShenandoahRootEvacuator rp(workers()->active_workers(),
                                ShenandoahPhaseTimings::init_evac,
                                !ShenandoahConcurrentRoots::should_do_concurrent_roots(),
-                               !ShenandoahConcurrentRoots::should_do_concurrent_nmethods());
+                               !ShenandoahConcurrentRoots::should_do_concurrent_class_unloading());
     ShenandoahEvacuateUpdateRootsTask roots_task(&rp);
     workers()->run_task(&roots_task);
   }
@@ -1521,7 +1521,7 @@ void ShenandoahHeap::op_final_mark() {
           types = ShenandoahRootVerifier::combine(types, ShenandoahRootVerifier::CLDGRoots);
         }
 
-        if (ShenandoahConcurrentRoots::should_do_concurrent_nmethods()) {
+        if (ShenandoahConcurrentRoots::should_do_concurrent_class_unloading()) {
           types = ShenandoahRootVerifier::combine(types, ShenandoahRootVerifier::CodeRoots);
         }
         verifier()->verify_roots_no_forwarded_except(types);
@@ -1616,7 +1616,7 @@ public:
 
 void ShenandoahHeap::op_roots() {
   if (is_evacuation_in_progress()) {
-    if (ShenandoahConcurrentRoots::should_do_concurrent_nmethods()) {
+    if (ShenandoahConcurrentRoots::should_do_concurrent_class_unloading()) {
       _unloader.unload();
     }
 
@@ -1977,7 +1977,6 @@ void ShenandoahHeap::stw_unload_classes(bool full_gc) {
                             ShenandoahPhaseTimings::full_gc_purge_class_unload :
                             ShenandoahPhaseTimings::purge_class_unload);
     purged_class = SystemDictionary::do_unloading(gc_timer());
-    _unloader.set_unloading_occurred(purged_class);
   }
 
   {
@@ -2030,7 +2029,9 @@ void ShenandoahHeap::stw_process_weak_roots(bool full_gc) {
 void ShenandoahHeap::parallel_cleaning(bool full_gc) {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
   stw_process_weak_roots(full_gc);
-  stw_unload_classes(full_gc);
+  if (!ShenandoahConcurrentRoots::should_do_concurrent_class_unloading()) {
+    stw_unload_classes(full_gc);
+  }
 }
 
 void ShenandoahHeap::set_has_forwarded_objects(bool cond) {
@@ -2121,8 +2122,7 @@ GCTimer* ShenandoahHeap::gc_timer() const {
 
 void ShenandoahHeap::prepare_concurrent_unloading() {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
-
-  if (ShenandoahConcurrentRoots::should_do_concurrent_nmethods()) {
+  if (ShenandoahConcurrentRoots::should_do_concurrent_class_unloading()) {
     ShenandoahCodeRoots::prepare_concurrent_unloading();
     _unloader.prepare();
   }
@@ -2130,7 +2130,9 @@ void ShenandoahHeap::prepare_concurrent_unloading() {
 
 void ShenandoahHeap::finish_concurrent_unloading() {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
-  _unloader.finish();
+  if (ShenandoahConcurrentRoots::should_do_concurrent_class_unloading()) {
+    _unloader.finish();
+  }
 }
 
 #ifdef ASSERT
@@ -2248,9 +2250,7 @@ void ShenandoahHeap::op_init_updaterefs() {
 void ShenandoahHeap::op_final_updaterefs() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "must be at safepoint");
 
-  if (ShenandoahConcurrentRoots::can_do_concurrent_nmethods()) {
-    finish_concurrent_unloading();
-  }
+  finish_concurrent_unloading();
 
   // Check if there is left-over work, and finish it
   if (_update_refs_iterator.has_next()) {
