@@ -149,9 +149,10 @@ void ShenandoahUnload::unlink() {
 }
 
 void ShenandoahUnload::purge() {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  SuspendibleThreadSetJoiner sts;
-  ShenandoahCodeRoots::purge(heap->workers());
+  {
+    SuspendibleThreadSetJoiner sts;
+    ShenandoahCodeRoots::purge(ShenandoahHeap::heap()->workers());
+  }
 
   ClassLoaderDataGraph::purge();
   CodeCache::purge_exception_caches();
