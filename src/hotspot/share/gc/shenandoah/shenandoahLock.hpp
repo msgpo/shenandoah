@@ -25,6 +25,7 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHLOCK_HPP
 
 #include "memory/allocation.hpp"
+#include "runtime/safepoint.hpp"
 #include "runtime/thread.hpp"
 
 class ShenandoahLock  {
