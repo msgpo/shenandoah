@@ -340,7 +340,7 @@ ShenandoahCodeRootsIterator::ShenandoahCodeRootsIterator() :
       break;
     }
     case 2: {
-      CodeCache_lock->lock();
+      CodeCache_lock->lock_without_safepoint_check();
       _table_snapshot = ShenandoahCodeRoots::table()->snapshot_for_iteration();
       break;
     }
