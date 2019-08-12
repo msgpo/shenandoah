@@ -351,10 +351,9 @@ int ShenandoahNMethodTable::index_of(nmethod* nm) const {
 void ShenandoahNMethodTable::remove(int idx) {
   shenandoah_assert_locked_or_safepoint(CodeCache_lock);
   assert(!_iteration_in_progress, "Can not happen");
-  assert(_index >= 0 && _index < _size, "Sanity");
+  assert(_index >= 0 && _index <= _size, "Sanity");
 
   assert(idx >= 0 && idx < _index, "Out of bound");
-  assert(_index > 0 && _index < _size, "Corrupted table");
   ShenandoahNMethod* snm = _array[idx];
 
   _index --;
