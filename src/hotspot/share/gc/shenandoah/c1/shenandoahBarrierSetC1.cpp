@@ -105,19 +105,21 @@ void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, 
   __ branch_destination(slow->continuation());
 }
 
-LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier(LIRGenerator* gen, LIR_Opr obj) {
+LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr) {
   if (ShenandoahLoadRefBarrier) {
-    return load_reference_barrier_impl(gen, obj);
+    return load_reference_barrier_impl(gen, obj, addr);
   } else {
     return obj;
   }
 }
 
-LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier_impl(LIRGenerator* gen, LIR_Opr obj) {
+LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier_impl(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr) {
   assert(ShenandoahLoadRefBarrier, "Should be enabled");
 
   obj = ensure_in_register(gen, obj);
   assert(obj->is_register(), "must be a register at this point");
+  addr = ensure_in_register(gen, addr);
+  assert(addr->is_register(), "must be a register at this point");
   LIR_Opr result = gen->result_register_for(obj->value_type());
   __ move(obj, result);
   LIR_Opr tmp1 = gen->new_register(T_OBJECT);
@@ -146,7 +148,7 @@ LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier_impl(LIRGenerator* gen, L
   }
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
 
-  CodeStub* slow = new ShenandoahLoadReferenceBarrierStub(obj, result, tmp1, tmp2);
+  CodeStub* slow = new ShenandoahLoadReferenceBarrierStub(obj, addr, result, tmp1, tmp2);
   __ branch(lir_cond_notEqual, T_INT, slow);
   __ branch_destination(slow->continuation());
 
@@ -184,6 +186,14 @@ void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value)
   BarrierSetC1::store_at_resolved(access, value);
 }
 
+LIR_Opr ShenandoahBarrierSetC1::resolve_address(LIRAccess& access, bool resolve_in_register) {
+  // We must resolve in register when patching. This is to avoid
+  // having a patch area in the load barrier stub, since the call
+  // into the runtime to patch will not have the proper oop map.
+  const bool patch_before_barrier = access.is_oop() && (access.decorators() & C1_NEEDS_PATCHING) != 0;
+  return BarrierSetC1::resolve_address(access, resolve_in_register || patch_before_barrier);
+}
+
 void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result) {
   if (!access.is_oop()) {
     BarrierSetC1::load_at_resolved(access, result);
@@ -210,7 +220,7 @@ void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result)
   if (ShenandoahLoadRefBarrier) {
     LIR_Opr tmp = gen->new_register(T_OBJECT);
     BarrierSetC1::load_at_resolved(access, tmp);
-    tmp = load_reference_barrier(access.gen(), tmp);
+    tmp = load_reference_barrier(access.gen(), tmp, access.resolved_addr());
     __ move(tmp, result);
   } else {
     BarrierSetC1::load_at_resolved(access, result);

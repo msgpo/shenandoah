@@ -835,8 +835,10 @@ void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assemble
 
   Register obj = stub->obj()->as_register();
   Register res = stub->result()->as_register();
+  Register addr = stub->addr()->as_register();
   Register tmp1 = stub->tmp1()->as_register();
   Register tmp2 = stub->tmp2()->as_register();
+  assert_different_registers(obj, res, addr, tmp1, tmp2);
 
   Label slow_path;
 
@@ -858,23 +860,9 @@ void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assemble
   __ testbool(tmp2);
   __ jcc(Assembler::zero, *stub->continuation());
 
-  // Test if object is resolved.
-  __ movptr(tmp1, Address(res, oopDesc::mark_offset_in_bytes()));
-  // Test if both lowest bits are set. We trick it by negating the bits
-  // then test for both bits clear.
-  __ notptr(tmp1);
-  __ testb(tmp1, markOopDesc::marked_value);
-  __ jccb(Assembler::notZero, slow_path);
-  // Clear both lower bits. It's still inverted, so set them, and then invert back.
-  __ orptr(tmp1, markOopDesc::marked_value);
-  __ notptr(tmp1);
-  // At this point, tmp1 contains the decoded forwarding pointer.
-  __ mov(res, tmp1);
-
-  __ jmp(*stub->continuation());
-
   __ bind(slow_path);
   ce->store_parameter(res, 0);
+  ce->store_parameter(addr, 1);
   __ call(RuntimeAddress(bs->load_reference_barrier_rt_code_blob()->code_begin()));
 
   __ jmp(*stub->continuation());
@@ -946,7 +934,12 @@ void ShenandoahBarrierSetAssembler::generate_c1_load_reference_barrier_runtime_s
 
   __ save_live_registers_no_oop_map(true);
   __ load_parameter(0, c_rarg0);
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier), c_rarg0);
+  __ load_parameter(1, c_rarg1);
+  if (UseCompressedOops) {
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_fixup_narrow), c_rarg0, c_rarg1);
+  } else {
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_fixup), c_rarg0, c_rarg1);
+  }
   __ restore_live_registers_except_rax(true);
 
   __ epilogue();
