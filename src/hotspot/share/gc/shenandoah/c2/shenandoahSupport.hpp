@@ -232,7 +232,7 @@ public:
   };
 
   enum Strength {
-    NONE, WEAK, STRONG, NA
+    NONE, STRONG
   };
 
 private:
