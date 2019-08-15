@@ -157,10 +157,18 @@ LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier_impl(LIRGenerator* gen, L
 
 LIR_Opr ShenandoahBarrierSetC1::ensure_in_register(LIRGenerator* gen, LIR_Opr obj) {
   if (!obj->is_register()) {
-    LIR_Opr obj_reg = gen->new_register(T_OBJECT);
+    LIR_Opr obj_reg;
     if (obj->is_constant()) {
+      obj_reg = gen->new_register(T_OBJECT);
       __ move(obj, obj_reg);
     } else {
+#ifdef AARCH64
+      // AArch64 expects double-size register.
+      obj_reg = gen->new_pointer_register();
+#else
+      // x86 expects single-size register.
+      obj_reg = gen->new_register(T_OBJECT);
+#endif
       __ leal(obj, obj_reg);
     }
     obj = obj_reg;
