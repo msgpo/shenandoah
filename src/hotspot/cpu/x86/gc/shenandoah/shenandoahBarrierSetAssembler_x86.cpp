@@ -856,8 +856,15 @@ void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assemble
   __ mov(tmp1, res);
   __ shrptr(tmp1, ShenandoahHeapRegion::region_size_bytes_shift_jint());
   __ movptr(tmp2, (intptr_t) ShenandoahHeap::in_cset_fast_test_addr());
+#ifdef _LP64
   __ movbool(tmp2, Address(tmp2, tmp1, Address::times_1));
   __ testbool(tmp2);
+#else
+  // On x86_32, C1 register allocator can give us the register without 8-bit support.
+  // Do the full-register access and test to avoid compilation failures.
+  __ movptr(tmp2, Address(tmp2, tmp1, Address::times_1));
+  __ testptr(tmp2, 0xFF);
+#endif
   __ jcc(Assembler::zero, *stub->continuation());
 
   __ bind(slow_path);
@@ -933,6 +940,8 @@ void ShenandoahBarrierSetAssembler::generate_c1_load_reference_barrier_runtime_s
   // arg0 : object to be resolved
 
   __ save_live_registers_no_oop_map(true);
+
+#ifdef _LP64
   __ load_parameter(0, c_rarg0);
   __ load_parameter(1, c_rarg1);
   if (UseCompressedOops) {
@@ -940,6 +949,12 @@ void ShenandoahBarrierSetAssembler::generate_c1_load_reference_barrier_runtime_s
   } else {
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_fixup), c_rarg0, c_rarg1);
   }
+#else
+  __ load_parameter(0, rax);
+  __ load_parameter(1, rbx);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_fixup), rax, rbx);
+#endif
+
   __ restore_live_registers_except_rax(true);
 
   __ epilogue();
