@@ -350,9 +350,9 @@ void ShenandoahBarrierSetAssembler::resolve_forward_pointer_not_null(MacroAssemb
   Label done;
   __ movptr(tmp, Address(dst, oopDesc::mark_offset_in_bytes()));
   __ notptr(tmp);
-  __ testb(tmp, markOopDesc::marked_value);
+  __ testb(tmp, markWord::marked_value);
   __ jccb(Assembler::notZero, done);
-  __ orptr(tmp, markOopDesc::marked_value);
+  __ orptr(tmp, markWord::marked_value);
   __ notptr(tmp);
   __ mov(dst, tmp);
   __ bind(done);
@@ -976,7 +976,7 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
   StubCodeMark mark(cgen, "StubRoutines", "shenandoah_lrb");
   address start = __ pc();
 
-  Label resolve_oop, slow_path, done;
+  Label resolve_oop, slow_path;
 
   // We use RDI, which also serves as argument register for slow call.
   // RAX always holds the src object ptr, except after the slow call,
@@ -1005,15 +1005,14 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
   // Test if both lowest bits are set. We trick it by negating the bits
   // then test for both bits clear.
   __ notptr(tmp2);
-  __ testb(tmp2, markOopDesc::marked_value);
+  __ testb(tmp2, markWord::marked_value);
   __ jccb(Assembler::notZero, slow_path);
   // Clear both lower bits. It's still inverted, so set them, and then invert back.
-  __ orptr(tmp2, markOopDesc::marked_value);
+  __ orptr(tmp2, markWord::marked_value);
   __ notptr(tmp2);
   // At this point, tmp2 contains the decoded forwarding pointer.
   __ mov(rax, tmp2);
 
-  __ bind(done);
   __ pop(tmp2);
   __ pop(tmp1);
   __ ret(0);
@@ -1034,9 +1033,14 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
   __ push(r14);
   __ push(r15);
 #endif
-
+  __ push(rbp);
+  __ movptr(rbp, rsp);
+  __ andptr(rsp, -StackAlignmentInBytes);
+  __ push_FPU_state();
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier), rax);
-
+  __ pop_FPU_state();
+  __ movptr(rsp, rbp);
+  __ pop(rbp);
 #ifdef _LP64
   __ pop(r15);
   __ pop(r14);
