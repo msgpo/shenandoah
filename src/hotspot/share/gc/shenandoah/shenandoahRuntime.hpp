@@ -41,7 +41,7 @@ public:
   static oopDesc* load_reference_barrier_fixup(oopDesc* src, oop* load_addr);
   static oopDesc* load_reference_barrier_fixup_narrow(oopDesc* src, narrowOop* load_addr);
 
-  static oopDesc* load_reference_barrier_native(oopDesc* src, oop* load_addr);
+  static oopDesc* load_reference_barrier_native(oopDesc* src);
 
   static void shenandoah_clone_barrier(oopDesc* obj);
 };
