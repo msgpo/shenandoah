@@ -36,6 +36,7 @@ protected:
 
 public:
   virtual ByteSize thread_disarmed_offset() const;
+  virtual intptr_t disarmed_address() const;
 };
 
 #endif // SHARE_GC_Z_ZBARRIERSETNMETHOD_HPP

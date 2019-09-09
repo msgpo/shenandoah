@@ -72,3 +72,8 @@ int ZBarrierSetNMethod::disarmed_value() const {
 ByteSize ZBarrierSetNMethod::thread_disarmed_offset() const {
   return ZThreadLocalData::nmethod_disarmed_offset();
 }
+
+intptr_t ZBarrierSetNMethod::disarmed_address() const {
+  ShouldNotReachHere();
+  return (intptr_t)NULL;
+}

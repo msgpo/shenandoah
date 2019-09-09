@@ -41,6 +41,7 @@ protected:
 
 public:
   virtual ByteSize thread_disarmed_offset() const = 0;
+  virtual intptr_t disarmed_address() const = 0;
 
   static int nmethod_stub_entry_barrier(address* return_address_ptr);
   bool nmethod_osr_entry_barrier(nmethod* nm);
