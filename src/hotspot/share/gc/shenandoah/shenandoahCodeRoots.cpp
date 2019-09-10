@@ -218,6 +218,7 @@ public:
     }
 
     // Heal oops and disarm
+    ShenandoahEvacOOMScope scope;
     ShenandoahNMethod::heal_nmethod(nm);
     ShenandoahNMethod::disarm_nmethod(nm);
 
@@ -255,7 +256,6 @@ public:
 
   virtual void work(uint worker_id) {
     ICRefillVerifierMark mark(_verifier);
-    ShenandoahEvacOOMScope scope;
     _iterator.nmethods_do(&_cl);
   }
 
