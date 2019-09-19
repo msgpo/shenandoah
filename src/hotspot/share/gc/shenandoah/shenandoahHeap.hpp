@@ -215,6 +215,9 @@ private:
   ShenandoahRegionIterator _update_refs_iterator;
 
 public:
+
+  inline HeapWord* base() const { return _heap_region.start(); }
+
   inline size_t num_regions() const { return _num_regions; }
   inline bool is_heap_region_special() { return _heap_region_special; }
 
@@ -537,12 +540,16 @@ public:
 
   bool is_in(const void* p) const;
 
+  MemRegion reserved_region() const { return _reserved; }
+  bool is_in_reserved(const void* addr) const { return _reserved.contains(addr); }
+
   void collect(GCCause::Cause cause);
   void do_full_collection(bool clear_all_soft_refs);
 
   // Used for parsing heap during error printing
   HeapWord* block_start(const void* addr) const;
   bool block_is_obj(const HeapWord* addr) const;
+  bool print_location(outputStream* st, void* addr) const;
 
   // Used for native heap walkers: heap dumpers, mostly
   void object_iterate(ObjectClosure* cl);
@@ -707,6 +714,7 @@ public:
 
   static inline oop cas_oop(oop n, narrowOop* addr, oop c);
   static inline oop cas_oop(oop n, oop* addr, oop c);
+  static inline oop cas_oop(oop n, narrowOop* addr, narrowOop c);
 
   void trash_humongous_region_at(ShenandoahHeapRegion *r);
 

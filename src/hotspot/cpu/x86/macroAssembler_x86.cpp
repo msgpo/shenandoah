@@ -427,13 +427,8 @@ void MacroAssembler::debug32(int rdi, int rsi, int rbp, int rsp, int rbx, int rd
       print_state32(rdi, rsi, rbp, rsp, rbx, rdx, rcx, rax, eip);
       BREAKPOINT;
     }
-  } else {
-    ttyLocker ttyl;
-    ::tty->print_cr("=============== DEBUG MESSAGE: %s ================\n", msg);
   }
-  // Don't assert holding the ttyLock
-    assert(false, "DEBUG MESSAGE: %s", msg);
-  ThreadStateTransition::transition(thread, _thread_in_vm, saved_state);
+  fatal("DEBUG MESSAGE: %s", msg);
 }
 
 void MacroAssembler::print_state32(int rdi, int rsi, int rbp, int rsp, int rbx, int rdx, int rcx, int rax, int eip) {
@@ -892,15 +887,9 @@ void MacroAssembler::debug64(char* msg, int64_t pc, int64_t regs[]) {
     if (os::message_box(msg, "Execution stopped, print registers?")) {
       print_state64(pc, regs);
       BREAKPOINT;
-      assert(false, "start up GDB");
     }
-    ThreadStateTransition::transition(thread, _thread_in_vm, saved_state);
-  } else {
-    ttyLocker ttyl;
-    ::tty->print_cr("=============== DEBUG MESSAGE: %s ================\n",
-                    msg);
-    assert(false, "DEBUG MESSAGE: %s", msg);
   }
+  fatal("DEBUG MESSAGE: %s", msg);
 }
 
 void MacroAssembler::print_state64(int64_t pc, int64_t regs[]) {
@@ -1620,8 +1609,8 @@ void MacroAssembler::rtm_inflated_locking(Register objReg, Register boxReg, Regi
 // See also: cmpFastLock and cmpFastUnlock.
 //
 // What follows is a specialized inline transliteration of the code
-// in slow_enter() and slow_exit().  If we're concerned about I$ bloat
-// another option would be to emit TrySlowEnter and TrySlowExit methods
+// in enter() and exit(). If we're concerned about I$ bloat another
+// option would be to emit TrySlowEnter and TrySlowExit methods
 // at startup-time.  These methods would accept arguments as
 // (rax,=Obj, rbx=Self, rcx=box, rdx=Scratch) and return success-failure
 // indications in the icc.ZFlag.  Fast_Lock and Fast_Unlock would simply
