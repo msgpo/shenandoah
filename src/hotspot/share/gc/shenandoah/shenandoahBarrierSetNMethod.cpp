@@ -48,7 +48,7 @@ bool ShenandoahBarrierSetNMethod::nmethod_entry_barrier(nmethod* nm) {
     // We don't need to take the lock when unlinking nmethods from
     // the Method, because it is only concurrently unlinked by
     // the entry barrier, which acquires the per nmethod lock.
-    nm->unlink_from_method(false /* acquire_lock */);
+    nm->unlink_from_method();
 
     // We can end up calling nmethods that are unloading
     // since we clear compiled ICs lazily. Returning false
