@@ -333,53 +333,6 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_not_null(MacroAssembl
 #endif
 }
 
-// ((WeakHandle)result).peek();
-void ShenandoahBarrierSetAssembler::peek_weak_handle(MacroAssembler* masm, Register rresult, Register rtmp) {
-  assert_different_registers(rresult, rtmp);
-  Label resolved;
-
-  // A null weak handle resolves to null.
-  __ cmpptr(rresult, 0);
-  __ jcc(Assembler::equal, resolved);
-
-  // Only 64 bit platforms support GCs that require a tmp register
-  // Only IN_HEAP loads require a thread_tmp register
-  // WeakHandle::peek is an indirection like jweak.
-  __ access_load_at(T_OBJECT, IN_NATIVE | ON_PHANTOM_OOP_REF | AS_NO_KEEPALIVE,
-                 rresult, Address(rresult, 0), rtmp, /*tmp_thread*/noreg);
-  __ bind(resolved);
-}
-
-void ShenandoahBarrierSetAssembler::c2i_entry_barrier(MacroAssembler* masm) {
-  BarrierSetNMethod* bs = BarrierSet::barrier_set()->barrier_set_nmethod();
-  if (bs == NULL) {
-    return;
-  }
-
-  Label bad_call;
-  __ cmpptr(rbx, 0); // rbx contains the incoming method for c2i adapters.
-  __ jcc(Assembler::equal, bad_call);
-
-  // Pointer chase to the method holder to find out if the method is concurrently unloading.
-  Label method_live;
-  __ load_method_holder_cld(rscratch1, rbx);
-
-  // Is it a strong CLD?
-  __ movl(rscratch2, Address(rscratch1, ClassLoaderData::keep_alive_offset()));
-  __ cmpptr(rscratch2, 0);
-  __ jcc(Assembler::greater, method_live);
-
-  // Is it a weak but alive CLD?
-  __ movptr(rscratch1, Address(rscratch1, ClassLoaderData::holder_offset()));
-  peek_weak_handle(masm, rscratch1, rscratch2);
-  __ cmpptr(rscratch1, 0);
-  __ jcc(Assembler::notEqual, method_live);
-
-  __ bind(bad_call);
-  __ jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()));
-  __ bind(method_live);
-}
-
 void ShenandoahBarrierSetAssembler::load_reference_barrier_native(MacroAssembler* masm, Register dst) {
   if (!ShenandoahLoadRefBarrier) {
     return;
@@ -530,6 +483,8 @@ void ShenandoahBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet d
     }
 
     if (ShenandoahKeepAliveBarrier && on_reference && keep_alive) {
+      __ push_IU_state();
+
       const Register thread = NOT_LP64(tmp_thread) LP64_ONLY(r15_thread);
       assert_different_registers(dst, tmp1, tmp_thread);
       NOT_LP64(__ get_thread(thread));
@@ -542,6 +497,7 @@ void ShenandoahBarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet d
                                    tmp1 /* tmp */,
                                    true /* tosca_live */,
                                    true /* expand_call */);
+      __ pop_IU_state();
     }
   }
 }
