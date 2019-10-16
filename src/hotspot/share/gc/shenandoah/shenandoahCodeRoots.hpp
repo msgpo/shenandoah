@@ -112,6 +112,8 @@ public:
   static void purge(WorkGang* workers);
   static void prepare_concurrent_unloading();
   static int  disarmed_value() { return _disarmed_value; }
+  static intptr_t disarmed_value_address() { return (intptr_t)&_disarmed_value; }
+
 private:
   static ShenandoahNMethodTable* _nmethod_table;
   static int                     _disarmed_value;

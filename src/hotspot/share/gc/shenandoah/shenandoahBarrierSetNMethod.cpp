@@ -71,3 +71,7 @@ int ShenandoahBarrierSetNMethod::disarmed_value() const {
 ByteSize ShenandoahBarrierSetNMethod::thread_disarmed_offset() const {
   return ShenandoahThreadLocalData::disarmed_value_offset();
 }
+
+intptr_t ShenandoahBarrierSetNMethod::disarmed_address() const {
+  return ShenandoahCodeRoots::disarmed_value_address();
+}

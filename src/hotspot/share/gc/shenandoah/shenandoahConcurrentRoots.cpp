@@ -37,7 +37,7 @@ bool ShenandoahConcurrentRoots::should_do_concurrent_roots() {
 }
 
 bool ShenandoahConcurrentRoots::can_do_concurrent_class_unloading() {
-#if defined(_LP64) && defined(X86) && !defined(SOLARIS)
+#if defined(X86) && !defined(SOLARIS)
   return ShenandoahCodeRootsStyle == 2 &&
          ClassUnloading &&
          strcmp(ShenandoahGCMode, "traversal") != 0;

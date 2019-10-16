@@ -4028,7 +4028,6 @@ class StubGenerator: public StubCodeGenerator {
     }
   }
 
-
  public:
   StubGenerator(CodeBuffer* code, bool all) : StubCodeGenerator(code) {
     if (all) {
