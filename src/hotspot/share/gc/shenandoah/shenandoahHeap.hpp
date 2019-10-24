@@ -44,6 +44,7 @@ class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
 class ShenandoahHeuristics;
 class ShenandoahMarkingContext;
+class ShenandoahMarkCompact;
 class ShenandoahMode;
 class ShenandoahPhaseTimings;
 class ShenandoahHeap;
@@ -581,6 +582,9 @@ public:
   oop pin_object(JavaThread* thread, oop obj);
   void unpin_object(JavaThread* thread, oop obj);
 
+  void sync_pinned_region_status();
+  void assert_pinned_region_status() NOT_DEBUG_RETURN;
+
 // ---------- Allocation support
 //
 private:
@@ -719,8 +723,6 @@ public:
   void trash_humongous_region_at(ShenandoahHeapRegion *r);
 
   void deduplicate_string(oop str);
-
-  void stop_concurrent_marking();
 
 private:
   void trash_cset_regions();
