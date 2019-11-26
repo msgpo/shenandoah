@@ -272,6 +272,7 @@ private:
   ShenandoahSharedFlag   _full_gc_in_progress;
   ShenandoahSharedFlag   _full_gc_move_in_progress;
   ShenandoahSharedFlag   _progress_last_gc;
+  ShenandoahSharedFlag   _concurrent_root_in_progress;
 
   void set_gc_state_all_threads(char state);
   void set_gc_state_mask(uint mask, bool value);
@@ -288,6 +289,7 @@ public:
   void set_full_gc_move_in_progress(bool in_progress);
   void set_concurrent_traversal_in_progress(bool in_progress);
   void set_has_forwarded_objects(bool cond);
+  void set_concurrent_root_in_progress(bool cond);
 
   inline bool is_stable() const;
   inline bool is_idle() const;
@@ -301,6 +303,7 @@ public:
   inline bool has_forwarded_objects() const;
   inline bool is_gc_in_progress_mask(uint mask) const;
   inline bool is_stw_gc_in_progress() const;
+  inline bool is_concurrent_root_in_progress() const;
 
 // ---------- GC cancellation and degeneration machinery
 //
@@ -526,6 +529,8 @@ private:
   void stw_unload_classes(bool full_gc);
   void stw_process_weak_roots(bool full_gc);
 
+  // Prepare concurrent root processing
+  void prepare_concurrent_roots();
   // Prepare and finish concurrent unloading
   void prepare_concurrent_unloading();
   void finish_concurrent_unloading();

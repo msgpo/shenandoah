@@ -1552,6 +1552,7 @@ void ShenandoahHeap::op_final_mark() {
       set_has_forwarded_objects(true);
 
       if (!is_degenerated_gc_in_progress()) {
+        prepare_concurrent_roots();
         prepare_concurrent_unloading();
         evacuate_and_update_roots();
       }
@@ -1676,6 +1677,8 @@ void ShenandoahHeap::op_roots() {
       workers()->run_task(&task);
     }
   }
+
+  set_concurrent_root_in_progress(false);
 }
 
 void ShenandoahHeap::op_reset() {
@@ -1931,6 +1934,15 @@ void ShenandoahHeap::set_concurrent_traversal_in_progress(bool in_progress) {
 void ShenandoahHeap::set_evacuation_in_progress(bool in_progress) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Only call this at safepoint");
   set_gc_state_mask(EVACUATION, in_progress);
+}
+
+void ShenandoahHeap::set_concurrent_root_in_progress(bool in_progress) {
+  assert(ShenandoahConcurrentRoots::can_do_concurrent_roots(), "Why set the flag?");
+  if (in_progress) {
+    _concurrent_root_in_progress.set();
+  } else {
+    _concurrent_root_in_progress.unset();
+  }
 }
 
 void ShenandoahHeap::ref_processing_init() {
@@ -2209,6 +2221,13 @@ void ShenandoahHeap::assert_pinned_region_status() {
 
 GCTimer* ShenandoahHeap::gc_timer() const {
   return _gc_timer;
+}
+
+void ShenandoahHeap::prepare_concurrent_roots() {
+  assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
+  if (ShenandoahConcurrentRoots::should_do_concurrent_roots()) {
+    set_concurrent_root_in_progress(true);
+  }
 }
 
 void ShenandoahHeap::prepare_concurrent_unloading() {

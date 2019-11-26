@@ -148,6 +148,11 @@ HeapWord* ShenandoahFreeSet::allocate_single(ShenandoahAllocRequest& req, bool& 
 HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, ShenandoahAllocRequest& req, bool& in_new_region) {
   assert (!has_no_alloc_capacity(r), "Performance: should avoid full regions on this path: " SIZE_FORMAT, r->region_number());
 
+  if (_heap->is_concurrent_root_in_progress() &&
+      r->is_trash()) {
+    return NULL;
+  }
+
   try_recycle_trashed(r);
 
   in_new_region = r->is_empty();
