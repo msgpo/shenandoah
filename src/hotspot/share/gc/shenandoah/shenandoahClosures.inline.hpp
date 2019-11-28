@@ -30,6 +30,7 @@
 #include "gc/shenandoah/shenandoahNMethod.inline.hpp"
 #include "gc/shenandoah/shenandoahTraversalGC.hpp"
 #include "oops/compressedOops.inline.hpp"
+#include "runtime/atomic.hpp"
 #include "runtime/thread.hpp"
 
 ShenandoahForwardedIsAliveClosure::ShenandoahForwardedIsAliveClosure() :
@@ -149,7 +150,7 @@ void ShenandoahEvacUpdateOopStorageRootsClosure::do_oop(oop* p) {
         resolved = _heap->evacuate_object(obj, _thread);
       }
 
-      Atomic::cmpxchg(resolved, p, obj);
+      Atomic::cmpxchg(p, obj, resolved);
     }
   }
 }
@@ -165,7 +166,7 @@ ShenandoahCodeBlobAndDisarmClosure::ShenandoahCodeBlobAndDisarmClosure(OopClosur
 
 void ShenandoahCodeBlobAndDisarmClosure::do_code_blob(CodeBlob* cb) {
   nmethod* const nm = cb->as_nmethod_or_null();
-  if (nm != NULL && !nm->test_set_oops_do_mark()) {
+  if (nm != NULL && nm->oops_do_try_claim()) {
     assert(!ShenandoahNMethod::gc_data(nm)->is_unregistered(), "Should not be here");
     CodeBlobToOopClosure::do_code_blob(cb);
     _bs->disarm(nm);

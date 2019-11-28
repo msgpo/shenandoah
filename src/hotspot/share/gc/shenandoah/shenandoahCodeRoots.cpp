@@ -31,6 +31,7 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
+#include "runtime/atomic.hpp"
 
 ShenandoahParallelCodeCacheIterator::ShenandoahParallelCodeCacheIterator(const GrowableArray<CodeHeap*>* heaps) {
   _length = heaps->length();
@@ -83,7 +84,7 @@ void ShenandoahParallelCodeHeapIterator::parallel_blobs_do(CodeBlobClosure* f) {
     int current = count++;
     if ((current & stride_mask) == 0) {
       process_block = (current >= _claimed_idx) &&
-                      (Atomic::cmpxchg(current + stride, &_claimed_idx, current) == current);
+                      (Atomic::cmpxchg(&_claimed_idx, current, current + stride) == current);
     }
     if (process_block) {
       if (cb->is_alive()) {
@@ -174,7 +175,7 @@ private:
   ShenandoahHeap* _heap;
 
   void set_failed() {
-    Atomic::store(true, &_failed);
+    Atomic::store(&_failed, true);
   }
 
    void unlink(nmethod* nm) {
@@ -211,12 +212,13 @@ public:
       return;
     }
 
-    ShenandoahReentrantLocker locker(nm_data->lock());
-
     if (nm->is_unloading()) {
+      ShenandoahReentrantLocker locker(nm_data->lock());
       unlink(nm);
       return;
     }
+
+    ShenandoahReentrantLocker locker(nm_data->lock());
 
     // Heal oops and disarm
     ShenandoahEvacOOMScope scope;

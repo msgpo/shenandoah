@@ -71,8 +71,10 @@
 
 #include "memory/metaspace.hpp"
 #include "oops/compressedOops.inline.hpp"
+#include "runtime/atomic.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
+#include "runtime/orderAccess.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/vmThread.hpp"
 #include "services/mallocTracker.hpp"
@@ -601,7 +603,7 @@ void ShenandoahHeap::post_initialize() {
 }
 
 size_t ShenandoahHeap::used() const {
-  return OrderAccess::load_acquire(&_used);
+  return Atomic::load_acquire(&_used);
 }
 
 size_t ShenandoahHeap::committed() const {
@@ -620,20 +622,20 @@ void ShenandoahHeap::decrease_committed(size_t bytes) {
 }
 
 void ShenandoahHeap::increase_used(size_t bytes) {
-  Atomic::add(bytes, &_used);
+  Atomic::add(&_used, bytes);
 }
 
 void ShenandoahHeap::set_used(size_t bytes) {
-  OrderAccess::release_store_fence(&_used, bytes);
+  Atomic::release_store_fence(&_used, bytes);
 }
 
 void ShenandoahHeap::decrease_used(size_t bytes) {
   assert(used() >= bytes, "never decrease heap size by more than we've left");
-  Atomic::sub(bytes, &_used);
+  Atomic::sub(&_used, bytes);
 }
 
 void ShenandoahHeap::increase_allocated(size_t bytes) {
-  Atomic::add(bytes, &_bytes_allocated_since_gc_start);
+  Atomic::add(&_bytes_allocated_since_gc_start, bytes);
 }
 
 void ShenandoahHeap::notify_mutator_alloc_words(size_t words, bool waste) {
@@ -1325,11 +1327,6 @@ void ShenandoahHeap::object_iterate(ObjectClosure* cl) {
   }
 }
 
-void ShenandoahHeap::safe_object_iterate(ObjectClosure* cl) {
-  assert(SafepointSynchronize::is_at_safepoint(), "safe iteration is only available during safepoints");
-  object_iterate(cl);
-}
-
 void ShenandoahHeap::heap_region_iterate(ShenandoahHeapRegionClosure* blk) const {
   for (size_t i = 0; i < num_regions(); i++) {
     ShenandoahHeapRegion* current = get_region(i);
@@ -1356,7 +1353,7 @@ public:
 
     size_t max = _heap->num_regions();
     while (_index < max) {
-      size_t cur = Atomic::add(stride, &_index) - stride;
+      size_t cur = Atomic::add(&_index, stride) - stride;
       size_t start = cur;
       size_t end = MIN2(cur + stride, max);
       if (start >= max) break;
@@ -2143,11 +2140,11 @@ address ShenandoahHeap::gc_state_addr() {
 }
 
 size_t ShenandoahHeap::bytes_allocated_since_gc_start() {
-  return OrderAccess::load_acquire(&_bytes_allocated_since_gc_start);
+  return Atomic::load_acquire(&_bytes_allocated_since_gc_start);
 }
 
 void ShenandoahHeap::reset_bytes_allocated_since_gc_start() {
-  OrderAccess::release_store_fence(&_bytes_allocated_since_gc_start, (size_t)0);
+  Atomic::release_store_fence(&_bytes_allocated_since_gc_start, (size_t)0);
 }
 
 void ShenandoahHeap::set_degenerated_gc_in_progress(bool in_progress) {

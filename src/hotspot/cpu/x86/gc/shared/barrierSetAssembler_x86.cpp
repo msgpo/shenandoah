@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -353,7 +353,7 @@ void BarrierSetAssembler::nmethod_entry_barrier(MacroAssembler* masm) {
 
   Register tmp = rdi;
   __ push(tmp);
-  __ movptr(tmp, bs_nm->disarmed_address());
+  __ movptr(tmp, (intptr_t)bs_nm->disarmed_value_address());
   Address disarmed_addr(tmp, 0);
   __ align(4);
   __ cmpl(disarmed_addr, 0);

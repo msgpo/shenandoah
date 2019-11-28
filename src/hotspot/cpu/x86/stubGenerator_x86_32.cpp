@@ -431,7 +431,8 @@ class StubGenerator: public StubCodeGenerator {
 
 
   //----------------------------------------------------------------------------------------------------
-  // Support for int32_t Atomic::xchg(int32_t exchange_value, volatile int32_t* dest)
+  // Implementation of int32_t atomic_xchg(int32_t exchange_value, volatile int32_t* dest)
+  // used by Atomic::xchg(volatile int32_t* dest, int32_t exchange_value)
   //
   // xchg exists as far back as 8086, lock needed for MP only
   // Stack layout immediately after call:
@@ -4027,6 +4028,7 @@ class StubGenerator: public StubCodeGenerator {
       StubRoutines::x86::_method_entry_barrier = generate_method_entry_barrier();
     }
   }
+
 
  public:
   StubGenerator(CodeBuffer* code, bool all) : StubCodeGenerator(code) {

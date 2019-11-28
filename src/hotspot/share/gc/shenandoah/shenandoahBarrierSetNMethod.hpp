@@ -43,7 +43,7 @@ public:
   }
 
   virtual ByteSize thread_disarmed_offset() const;
-  virtual intptr_t disarmed_address() const;
+  virtual int* disarmed_value_address() const;
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHBARRIERSETNMETHOD_HPP

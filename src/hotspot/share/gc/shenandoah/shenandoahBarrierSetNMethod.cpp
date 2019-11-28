@@ -63,7 +63,6 @@ bool ShenandoahBarrierSetNMethod::nmethod_entry_barrier(nmethod* nm) {
   return true;
 }
 
-
 int ShenandoahBarrierSetNMethod::disarmed_value() const {
   return ShenandoahCodeRoots::disarmed_value();
 }
@@ -72,6 +71,6 @@ ByteSize ShenandoahBarrierSetNMethod::thread_disarmed_offset() const {
   return ShenandoahThreadLocalData::disarmed_value_offset();
 }
 
-intptr_t ShenandoahBarrierSetNMethod::disarmed_address() const {
+int* ShenandoahBarrierSetNMethod::disarmed_value_address() const {
   return ShenandoahCodeRoots::disarmed_value_address();
 }
