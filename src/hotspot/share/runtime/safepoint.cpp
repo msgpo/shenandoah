@@ -532,6 +532,10 @@ bool SafepointSynchronize::is_cleanup_needed() {
   return false;
 }
 
+bool SafepointSynchronize::is_forced_cleanup_needed() {
+  return ObjectSynchronizer::needs_monitor_scavenge();
+}
+
 class ParallelSPCleanupThreadClosure : public ThreadClosure {
 private:
   CodeBlobClosure* _nmethod_cl;
@@ -877,7 +881,7 @@ void SafepointSynchronize::block(JavaThread *thread) {
 void SafepointSynchronize::handle_polling_page_exception(JavaThread *thread) {
   assert(thread->is_Java_thread(), "polling reference encountered by VM thread");
   assert(thread->thread_state() == _thread_in_Java, "should come from Java code");
-  if (!ThreadLocalHandshakes) {
+  if (!SafepointMechanism::uses_thread_local_poll()) {
     assert(SafepointSynchronize::is_synchronizing(), "polling encountered outside safepoint synchronization");
   }
 
