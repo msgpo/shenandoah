@@ -182,19 +182,27 @@ public:
 
 class ShenandoahSATBAndRemarkCodeRootsThreadsClosure : public ThreadClosure {
 private:
-  ShenandoahSATBBufferClosure* _satb_cl;
-  MarkingCodeBlobClosure*      _code_cl;
+  ShenandoahSATBBufferClosure* const _satb_cl;
+  OopClosure*                  const _cl;
+  MarkingCodeBlobClosure*      const _code_cl;
   uintx _claim_token;
-
 public:
-  ShenandoahSATBAndRemarkCodeRootsThreadsClosure(ShenandoahSATBBufferClosure* satb_cl, MarkingCodeBlobClosure* code_cl) :
-    _satb_cl(satb_cl), _code_cl(code_cl),
+  ShenandoahSATBAndRemarkCodeRootsThreadsClosure(ShenandoahSATBBufferClosure* satb_cl,
+                                                 OopClosure* cl, MarkingCodeBlobClosure* code_cl) :
+    _satb_cl(satb_cl), _cl(cl), _code_cl(code_cl),
     _claim_token(Threads::thread_claim_token()) {}
 
   void do_thread(Thread* thread) {
     if (thread->claim_threads_do(true, _claim_token)) {
       ShenandoahThreadLocalData::satb_mark_queue(thread).apply_closure_and_empty(_satb_cl);
-      if (_code_cl != NULL && thread->is_Java_thread()) {
+      if (_cl != NULL) {
+        // This doesn't appear to add very much to final-mark latency. If that ever becomes a problem,
+        // we can attempt to trim it to only scan actual thread-stacks (and avoid stuff like handles, monitors, etc)
+        // and there only compiled frames. We can also make thread-scans templatized to avoid virtual calls and
+        // instead inline the closures.
+        ResourceMark rm;
+        thread->oops_do(_cl, _code_cl);
+      } else if (_code_cl != NULL && thread->is_Java_thread()) {
         // In theory it should not be neccessary to explicitly walk the nmethods to find roots for concurrent marking
         // however the liveness of oops reachable from nmethods have very complex lifecycles:
         // * Alive if on the stack of an executing method
@@ -243,20 +251,20 @@ public:
       SATBMarkQueueSet& satb_mq_set = ShenandoahBarrierSet::satb_mark_queue_set();
       while (satb_mq_set.apply_closure_to_completed_buffer(&cl));
 
-      if (heap->unload_classes() && !ShenandoahConcurrentRoots::can_do_concurrent_class_unloading()) {
-        if (heap->has_forwarded_objects()) {
-          ShenandoahMarkResolveRefsClosure resolve_mark_cl(q, rp);
-          MarkingCodeBlobClosure blobsCl(&resolve_mark_cl, !CodeBlobToOopClosure::FixRelocations);
-          ShenandoahSATBAndRemarkCodeRootsThreadsClosure tc(&cl, &blobsCl);
-          Threads::threads_do(&tc);
-        } else {
-          ShenandoahMarkRefsClosure mark_cl(q, rp);
-          MarkingCodeBlobClosure blobsCl(&mark_cl, !CodeBlobToOopClosure::FixRelocations);
-          ShenandoahSATBAndRemarkCodeRootsThreadsClosure tc(&cl, &blobsCl);
-          Threads::threads_do(&tc);
-        }
+      bool do_nmethods = heap->unload_classes() && !ShenandoahConcurrentRoots::can_do_concurrent_class_unloading();
+      if (heap->has_forwarded_objects()) {
+        ShenandoahMarkResolveRefsClosure resolve_mark_cl(q, rp);
+        MarkingCodeBlobClosure blobsCl(&resolve_mark_cl, !CodeBlobToOopClosure::FixRelocations);
+        ShenandoahSATBAndRemarkCodeRootsThreadsClosure tc(&cl,
+                                                          ShenandoahAggressiveReferenceDiscovery ? &resolve_mark_cl : NULL,
+                                                          do_nmethods ? &blobsCl : NULL);
+        Threads::threads_do(&tc);
       } else {
-        ShenandoahSATBAndRemarkCodeRootsThreadsClosure tc(&cl, NULL);
+        ShenandoahMarkRefsClosure mark_cl(q, rp);
+        MarkingCodeBlobClosure blobsCl(&mark_cl, !CodeBlobToOopClosure::FixRelocations);
+        ShenandoahSATBAndRemarkCodeRootsThreadsClosure tc(&cl,
+                                                          ShenandoahAggressiveReferenceDiscovery ? &mark_cl : NULL,
+                                                          do_nmethods ? &blobsCl : NULL);
         Threads::threads_do(&tc);
       }
     }

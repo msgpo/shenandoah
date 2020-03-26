@@ -151,6 +151,11 @@
           "other cleanup policy. This minimizes footprint at expense of"    \
           "more soft reference churn in applications.")                     \
                                                                             \
+  diagnostic(bool, ShenandoahAggressiveReferenceDiscovery, true,            \
+          "Aggressively avoid keeping alive references upon "               \
+          "Reference.get(), at the expense of some extra latency, "         \
+          "caused by an extra threads-stacks-scan at final-mark")           \
+                                                                            \
   experimental(bool, ShenandoahUncommit, true,                              \
           "Allow to uncommit memory under unused regions and metadata. "    \
           "This optimizes footprint at expense of allocation latency in "   \

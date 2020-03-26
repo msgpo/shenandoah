@@ -589,9 +589,14 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
 
     if (on_weak_ref) {
       // Use the pre-barrier to record the value in the referent field
-      satb_write_barrier_pre(kit, false /* do_load */,
-                             NULL /* obj */, NULL /* adr */, max_juint /* alias_idx */, NULL /* val */, NULL /* val_type */,
-                             load /* pre_val */, T_OBJECT);
+      if (ShenandoahAggressiveReferenceDiscovery) {
+        load = shenandoah_enqueue_barrier(kit, load);
+      } else {
+        satb_write_barrier_pre(kit, false /* do_load */,
+                               NULL /* obj */, NULL /* adr */, max_juint /* alias_idx */, NULL /* val */,
+                               NULL /* val_type */,
+                               load /* pre_val */, T_OBJECT);
+      }
       // Add memory barrier to prevent commoning reads from this field
       // across safepoint since GC can change its value.
       kit->insert_mem_bar(Op_MemBarCPUOrder);
