@@ -46,6 +46,7 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc/shenandoah/shenandoahHeapRegionSet.hpp"
+#include "gc/shenandoah/shenandoahIUMode.hpp"
 #include "gc/shenandoah/shenandoahMarkCompact.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahMemoryPool.hpp"
@@ -371,7 +372,6 @@ jint ShenandoahHeap::initialize() {
   _traversal_gc = strcmp(ShenandoahGCMode, "traversal") == 0 ?
                   new ShenandoahTraversalGC(this) :
                   NULL;
-
   _control_thread = new ShenandoahControlThread();
 
   log_info(gc, init)("Initialize Shenandoah heap: " SIZE_FORMAT "%s initial, " SIZE_FORMAT "%s min, " SIZE_FORMAT "%s max",
@@ -393,6 +393,8 @@ void ShenandoahHeap::initialize_heuristics() {
       _gc_mode = new ShenandoahTraversalMode();
     } else if (strcmp(ShenandoahGCMode, "normal") == 0) {
       _gc_mode = new ShenandoahNormalMode();
+    } else if (strcmp(ShenandoahGCMode, "iu") == 0) {
+      _gc_mode = new ShenandoahIUMode();
     } else if (strcmp(ShenandoahGCMode, "passive") == 0) {
       _gc_mode = new ShenandoahPassiveMode();
     } else {

@@ -87,7 +87,8 @@ inline void ShenandoahBarrierSet::satb_enqueue(oop value) {
 }
 
 inline void ShenandoahBarrierSet::storeval_barrier(oop obj) {
-  if (obj != NULL && ShenandoahStoreValEnqueueBarrier && _heap->is_concurrent_traversal_in_progress()) {
+  if (obj != NULL && ShenandoahStoreValEnqueueBarrier &&
+      _heap->is_gc_in_progress_mask(ShenandoahHeap::MARKING | ShenandoahHeap::TRAVERSAL)) {
     enqueue(obj);
   }
 }
@@ -287,9 +288,11 @@ void ShenandoahBarrierSet::arraycopy_work(T* src, size_t count) {
 
 template <class T>
 void ShenandoahBarrierSet::arraycopy_pre_work(T* src, T* dst, size_t count) {
-  if (_heap->is_concurrent_mark_in_progress() &&
-      !_heap->marking_context()->allocated_after_mark_start(reinterpret_cast<HeapWord*>(dst))) {
-    arraycopy_work<T, false, false, true>(dst, count);
+  if (_heap->is_concurrent_mark_in_progress()) {
+    T* ary = ShenandoahSATBBarrier ? dst : src;
+    if (ShenandoahStoreValEnqueueBarrier || !_heap->marking_context()->allocated_after_mark_start(reinterpret_cast<HeapWord*>(ary))) {
+      arraycopy_work<T, false, false, true>(ary, count);
+    }
   }
 
   if (_heap->has_forwarded_objects()) {

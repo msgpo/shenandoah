@@ -63,10 +63,11 @@
           "This also caps the maximum TLAB size.")                          \
           range(1, 100)                                                     \
                                                                             \
-  experimental(ccstr, ShenandoahGCMode, "normal",                           \
+  experimental(ccstr, ShenandoahGCMode, "iu",                               \
           "GC mode to use.  Among other things, this defines which "        \
           "barriers are in in use. Possible values are:"                    \
           " normal - default concurrent GC (three pass mark-evac-update);"  \
+          " iu - incremental-update concurrent GC (three pass mark-evac-update);"  \
           " traversal - traversal concurrent GC (single-pass); "            \
           " passive - stop the world GC only (either degenerated or full)") \
                                                                             \
