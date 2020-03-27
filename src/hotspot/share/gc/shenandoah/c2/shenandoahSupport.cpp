@@ -860,8 +860,8 @@ static void hide_strip_mined_loop(OuterStripMinedLoopNode* outer, CountedLoopNod
   inner->clear_strip_mined();
 }
 
-void ShenandoahBarrierC2Support::test_heap_state(Node*& ctrl, Node* raw_mem, Node*& heap_stable_ctrl,
-                                                 PhaseIdealLoop* phase, int flags) {
+void ShenandoahBarrierC2Support::test_heap_stable(Node*& ctrl, Node* raw_mem, Node*& heap_stable_ctrl,
+                                                  PhaseIdealLoop* phase) {
   IdealLoopTree* loop = phase->get_loop(ctrl);
   Node* thread = new ThreadLocalNode();
   phase->register_new_node(thread, ctrl);
@@ -875,7 +875,7 @@ void ShenandoahBarrierC2Support::test_heap_state(Node*& ctrl, Node* raw_mem, Nod
 
   Node* gc_state = new LoadBNode(ctrl, raw_mem, gc_state_addr, gc_state_adr_type, TypeInt::BYTE, MemNode::unordered);
   phase->register_new_node(gc_state, ctrl);
-  Node* heap_stable_and = new AndINode(gc_state, phase->igvn().intcon(flags));
+  Node* heap_stable_and = new AndINode(gc_state, phase->igvn().intcon(ShenandoahHeap::HAS_FORWARDED));
   phase->register_new_node(heap_stable_and, ctrl);
   Node* heap_stable_cmp = new CmpINode(heap_stable_and, phase->igvn().zerocon(T_INT));
   phase->register_new_node(heap_stable_cmp, ctrl);
@@ -889,7 +889,7 @@ void ShenandoahBarrierC2Support::test_heap_state(Node*& ctrl, Node* raw_mem, Nod
   ctrl = new IfTrueNode(heap_stable_iff);
   phase->register_control(ctrl, loop, heap_stable_iff);
 
-  assert(is_heap_state_test(heap_stable_iff, flags), "Should match the shape");
+  assert(is_heap_stable_test(heap_stable_iff), "Should match the shape");
 }
 
 void ShenandoahBarrierC2Support::test_null(Node*& ctrl, Node* val, Node*& null_ctrl, PhaseIdealLoop* phase) {
@@ -1437,7 +1437,7 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     Node* raw_mem_phi = PhiNode::make(region, raw_mem, Type::MEMORY, TypeRawPtr::BOTTOM);
 
     // Stable path.
-    test_heap_state(ctrl, raw_mem, heap_stable_ctrl, phase, ShenandoahHeap::HAS_FORWARDED);
+    test_heap_stable(ctrl, raw_mem, heap_stable_ctrl, phase);
     IfNode* heap_stable_iff = heap_stable_ctrl->in(0)->as_If();
 
     // Heap stable case
@@ -1570,13 +1570,11 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
   assert(ShenandoahBarrierSetC2::bsc2()->state()->load_reference_barriers_count() == 0, "all load reference barrier nodes should have been replaced");
 
   for (int i = state->enqueue_barriers_count() - 1; i >= 0; i--) {
-    ShenandoahEnqueueBarrierNode* barrier = state->enqueue_barrier(i);
+    Node* barrier = state->enqueue_barrier(i);
     Node* pre_val = barrier->in(1);
 
-    assert(!phase->igvn().type(pre_val)->higher_equal(TypePtr::NULL_PTR), "no known-NULLs here");
-
-    if (barrier->can_eliminate(phase)) {
-      phase->igvn().replace_node(barrier, pre_val);
+    if (phase->igvn().type(pre_val)->higher_equal(TypePtr::NULL_PTR)) {
+      ShouldNotReachHere();
       continue;
     }
 
@@ -1610,7 +1608,7 @@ void ShenandoahBarrierC2Support::pin_and_expand(PhaseIdealLoop* phase) {
     Node* phi2 = PhiNode::make(region2, raw_mem, Type::MEMORY, TypeRawPtr::BOTTOM);
 
     // Stable path.
-    test_heap_state(ctrl, raw_mem, heap_stable_ctrl, phase, ShenandoahHeap::TRAVERSAL | ShenandoahHeap::MARKING);
+    test_heap_stable(ctrl, raw_mem, heap_stable_ctrl, phase);
     region->init_req(_heap_stable, heap_stable_ctrl);
     phi->init_req(_heap_stable, raw_mem);
 
@@ -2171,87 +2169,6 @@ Node* ShenandoahEnqueueBarrierNode::next(Node* n) {
   }
   ShouldNotReachHere();
   return NULL;
-}
-
-bool ShenandoahEnqueueBarrierNode::can_eliminate(PhaseIdealLoop* phase) {
-  return ShenandoahHeap::heap()->traversal_gc() == NULL &&
-         is_redundant() && ShenandoahAggressiveReferenceDiscovery;
-}
-
-bool ShenandoahEnqueueBarrierNode::is_redundant() {
-  Unique_Node_List visited;
-  Node_Stack stack(0);
-  stack.push(this, 0);
-
-  while (stack.size() > 0) {
-    Node* n = stack.node();
-    if (visited.member(n)) {
-      stack.pop();
-      continue;
-    }
-    visited.push(n);
-    bool visit_users = false;
-    switch (n->Opcode()) {
-      case Op_CallStaticJava:
-        if (n->as_CallStaticJava()->uncommon_trap_request() == 0) {
-          return false;
-        }
-        break;
-      case Op_CallDynamicJava:
-      case Op_CompareAndExchangeN:
-      case Op_CompareAndExchangeP:
-      case Op_CompareAndSwapN:
-      case Op_CompareAndSwapP:
-      case Op_ShenandoahCompareAndSwapN:
-      case Op_ShenandoahCompareAndSwapP:
-      case Op_GetAndSetN:
-      case Op_GetAndSetP:
-      case Op_Return:
-      case Op_StoreN:
-      case Op_StoreP:
-        return false;
-        break;
-      case Op_AddP:
-      case Op_Allocate:
-      case Op_AllocateArray:
-      case Op_ArrayCopy:
-      case Op_CmpP:
-      case Op_LoadL:
-      case Op_SafePoint:
-      case Op_SubTypeCheck:
-      case Op_StoreLConditional:
-      case Op_StoreIConditional:
-      case Op_FastUnlock:
-        break;
-      case Op_CastPP:
-      case Op_CheckCastPP:
-      case Op_CMoveN:
-      case Op_CMoveP:
-      case Op_EncodeP:
-      case Op_Phi:
-      case Op_ShenandoahEnqueueBarrier:
-        visit_users = true;
-        break;
-      default: {
-#ifdef ASSERT
-        fatal("Unknown node in is_redundant: %s", NodeClassNames[n->Opcode()]);
-#endif
-        // Default to useful: better to have excess barriers, rather than miss some.
-        return false;
-      }
-    }
-
-    stack.pop();
-    if (visit_users) {
-      for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
-        Node* user = n->fast_out(i);
-        if (user != NULL) {
-          stack.push(user, 0);
-        }
-      }
-    }
-  }
-  return true;
 }
 
 Node* ShenandoahEnqueueBarrierNode::Identity(PhaseGVN* phase) {
@@ -3328,6 +3245,7 @@ bool ShenandoahLoadReferenceBarrierNode::is_redundant() {
       case Op_GetAndAddI:
       case Op_GetAndAddB:
       case Op_GetAndAddS:
+      case Op_ShenandoahEnqueueBarrier:
       case Op_FastLock:
       case Op_FastUnlock:
       case Op_Rethrow:
@@ -3404,7 +3322,6 @@ bool ShenandoahLoadReferenceBarrierNode::is_redundant() {
       case Op_CMoveP:
       case Op_Phi:
       case Op_ShenandoahLoadReferenceBarrier:
-      case Op_ShenandoahEnqueueBarrier:
         // Whether or not these need the barriers depends on their users
         visit_users = true;
         break;
