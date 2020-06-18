@@ -136,7 +136,7 @@ ZFILE_Open(const char *fname, int flags) {
             NULL);
     } else {
         /* Get required buffer size to convert to Unicode */
-        int wfname_len = MultiByteToWideChar(CP_THREAD_ACP, MB_ERR_INVALID_CHARS,
+        int wfname_len = MultiByteToWideChar(CP_ACP, MB_ERR_INVALID_CHARS,
                                              fname, -1, NULL, 0);
         if (wfname_len == 0) {
             return (jlong)INVALID_HANDLE_VALUE;
@@ -144,7 +144,7 @@ ZFILE_Open(const char *fname, int flags) {
         if ((wfname = (WCHAR*)malloc(wfname_len * sizeof(WCHAR))) == NULL) {
             return (jlong)INVALID_HANDLE_VALUE;
         }
-        if (MultiByteToWideChar(CP_THREAD_ACP, MB_ERR_INVALID_CHARS,
+        if (MultiByteToWideChar(CP_ACP, MB_ERR_INVALID_CHARS,
                                 fname, -1, wfname, wfname_len) == 0) {
             free(wfname);
             return (jlong)INVALID_HANDLE_VALUE;
@@ -1595,4 +1595,110 @@ ZIP_InflateFully(void *inBuf, jlong inLen, void *outBuf, jlong outLen, char **pm
 
     inflateEnd(&strm);
     return JNI_TRUE;
+}
+
+static voidpf tracking_zlib_alloc(voidpf opaque, uInt items, uInt size) {
+  size_t* needed = (size_t*) opaque;
+  *needed += (size_t) items * (size_t) size;
+  return (voidpf) calloc((size_t) items, (size_t) size);
+}
+
+static void tracking_zlib_free(voidpf opaque, voidpf address) {
+  free((void*) address);
+}
+
+static voidpf zlib_block_alloc(voidpf opaque, uInt items, uInt size) {
+  char** range = (char**) opaque;
+  voidpf result = NULL;
+  size_t needed = (size_t) items * (size_t) size;
+
+  if (range[1] - range[0] >= (ptrdiff_t) needed) {
+    result = (voidpf) range[0];
+    range[0] += needed;
+  }
+
+  return result;
+}
+
+static void zlib_block_free(voidpf opaque, voidpf address) {
+  /* Nothing to do. */
+}
+
+static char const* deflateInit2Wrapper(z_stream* strm, int level) {
+  int err = deflateInit2(strm, level >= 0 && level <= 9 ? level : Z_DEFAULT_COMPRESSION,
+                         Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY);
+  if (err == Z_MEM_ERROR) {
+    return "Out of memory in deflateInit2";
+  }
+
+  if (err != Z_OK) {
+    return "Internal error in deflateInit2";
+  }
+
+  return NULL;
+}
+
+JNIEXPORT char const*
+ZIP_GZip_InitParams(size_t inLen, size_t* outLen, size_t* tmpLen, int level) {
+  z_stream strm;
+  *tmpLen = 0;
+  char const* errorMsg;
+
+  memset(&strm, 0, sizeof(z_stream));
+  strm.zalloc = tracking_zlib_alloc;
+  strm.zfree = tracking_zlib_free;
+  strm.opaque = (voidpf) tmpLen;
+
+  errorMsg = deflateInit2Wrapper(&strm, level);
+
+  if (errorMsg == NULL) {
+    *outLen = (size_t) deflateBound(&strm, (uLong) inLen);
+    deflateEnd(&strm);
+  }
+
+  return errorMsg;
+}
+
+JNIEXPORT size_t
+ZIP_GZip_Fully(char* inBuf, size_t inLen, char* outBuf, size_t outLen, char* tmp, size_t tmpLen,
+               int level, char* comment, char const** pmsg) {
+  z_stream strm;
+  gz_header hdr;
+  int err;
+  char* block[] = {tmp, tmpLen + tmp};
+  size_t result = 0;
+
+  memset(&strm, 0, sizeof(z_stream));
+  strm.zalloc = zlib_block_alloc;
+  strm.zfree = zlib_block_free;
+  strm.opaque = (voidpf) block;
+
+  *pmsg = deflateInit2Wrapper(&strm, level);
+
+  if (*pmsg == NULL) {
+    strm.next_out = (Bytef *) outBuf;
+    strm.avail_out = (uInt) outLen;
+    strm.next_in = (Bytef *) inBuf;
+    strm.avail_in = (uInt) inLen;
+
+    if (comment != NULL) {
+      memset(&hdr, 0, sizeof(hdr));
+      hdr.comment = (Bytef*) comment;
+      deflateSetHeader(&strm, &hdr);
+    }
+
+    err = deflate(&strm, Z_FINISH);
+
+    if (err == Z_OK || err == Z_BUF_ERROR) {
+      *pmsg = "Buffer too small";
+    } else if (err != Z_STREAM_END) {
+      *pmsg = "Intern deflate error";
+    } else {
+      result = (size_t) strm.total_out;
+    }
+
+    deflateEnd(&strm);
+  }
+
+  return result;
 }

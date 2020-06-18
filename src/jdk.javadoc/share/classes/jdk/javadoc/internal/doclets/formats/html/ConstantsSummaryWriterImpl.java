@@ -205,7 +205,7 @@ public class ConstantsSummaryWriterImpl extends HtmlDocletWriter implements Cons
         }
         caption.add(classlink);
 
-        Table table = new Table(HtmlStyle.constantsSummary)
+        Table table = new Table(HtmlStyle.constantsSummary, HtmlStyle.summaryTable)
                 .setCaption(caption)
                 .setHeader(constantsTableHeader)
                 .setRowScopeColumn(1)
@@ -214,8 +214,7 @@ public class ConstantsSummaryWriterImpl extends HtmlDocletWriter implements Cons
         for (VariableElement field : fields) {
             table.addRow(getTypeColumn(field), getNameColumn(field), getValue(field));
         }
-        Content li = HtmlTree.LI(HtmlStyle.blockList, table);
-        classConstantTree.add(li);
+        classConstantTree.add(HtmlTree.LI(table));
     }
 
     /**

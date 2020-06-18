@@ -77,7 +77,6 @@ import jdk.javadoc.internal.doclets.formats.html.markup.ContentBuilder;
 import jdk.javadoc.internal.doclets.formats.html.markup.Entity;
 import jdk.javadoc.internal.doclets.formats.html.markup.FixedStringContent;
 import jdk.javadoc.internal.doclets.formats.html.markup.Head;
-import jdk.javadoc.internal.doclets.formats.html.markup.HtmlAttr;
 import jdk.javadoc.internal.doclets.formats.html.markup.HtmlDocument;
 import jdk.javadoc.internal.doclets.formats.html.markup.HtmlStyle;
 import jdk.javadoc.internal.doclets.formats.html.markup.TagName;
@@ -87,7 +86,6 @@ import jdk.javadoc.internal.doclets.formats.html.markup.RawHtml;
 import jdk.javadoc.internal.doclets.formats.html.markup.Script;
 import jdk.javadoc.internal.doclets.formats.html.markup.StringContent;
 import jdk.javadoc.internal.doclets.formats.html.markup.TableHeader;
-import jdk.javadoc.internal.doclets.toolkit.AnnotationTypeWriter;
 import jdk.javadoc.internal.doclets.toolkit.ClassWriter;
 import jdk.javadoc.internal.doclets.toolkit.Content;
 import jdk.javadoc.internal.doclets.toolkit.Messages;
@@ -95,6 +93,7 @@ import jdk.javadoc.internal.doclets.toolkit.PackageSummaryWriter;
 import jdk.javadoc.internal.doclets.toolkit.Resources;
 import jdk.javadoc.internal.doclets.toolkit.taglets.DocRootTaglet;
 import jdk.javadoc.internal.doclets.toolkit.taglets.TagletWriter;
+import jdk.javadoc.internal.doclets.toolkit.util.Comparators;
 import jdk.javadoc.internal.doclets.toolkit.util.CommentHelper;
 import jdk.javadoc.internal.doclets.toolkit.util.DocFile;
 import jdk.javadoc.internal.doclets.toolkit.util.DocFileIOException;
@@ -169,6 +168,8 @@ public class HtmlDocletWriter {
 
     protected final DocPaths docPaths;
 
+    protected final Comparators comparators;
+
     /**
      * To check whether annotation heading is printed or not.
      */
@@ -219,6 +220,7 @@ public class HtmlDocletWriter {
         this.resources = configuration.docResources;
         this.links = new Links(path);
         this.utils = configuration.utils;
+        this.comparators = utils.comparators;
         this.path = path;
         this.pathToRoot = path.parent().invert();
         this.filename = path.basename();
@@ -512,21 +514,6 @@ public class HtmlDocletWriter {
                 new StringContent(label));
         Content li = HtmlTree.LI(mainTreeContent);
         return li;
-    }
-
-    /**
-     * Get table caption.
-     *
-     * @param title the content for the caption
-     * @return a content tree for the caption
-     */
-    public Content getTableCaption(Content title) {
-        Content captionSpan = HtmlTree.SPAN(title);
-        Content space = Entity.NO_BREAK_SPACE;
-        Content tabSpan = HtmlTree.SPAN(HtmlStyle.tabEnd, space);
-        Content caption = HtmlTree.CAPTION(captionSpan);
-        caption.add(tabSpan);
-        return caption;
     }
 
     /**
@@ -991,7 +978,7 @@ public class HtmlDocletWriter {
             return executableElement.getSimpleName().toString();
         }
         String member = anchorName(executableElement);
-        String erasedSignature = utils.makeSignature(executableElement, true, true);
+        String erasedSignature = utils.makeSignature(executableElement, null, true, true);
         return member + erasedSignature;
     }
 
@@ -1011,7 +998,7 @@ public class HtmlDocletWriter {
 
         CommentHelper ch = utils.getCommentHelper(element);
         String tagName = ch.getTagName(see);
-        String seetext = replaceDocRootDir(utils.normalizeNewlines(ch.getText(see)).toString());
+        String seetext = replaceDocRootDir(removeTrailingSlash(utils.normalizeNewlines(ch.getText(see)).toString()));
         // Check if @see is an href or "string"
         if (seetext.startsWith("<") || seetext.startsWith("\"")) {
             return new RawHtml(seetext);
@@ -1023,7 +1010,6 @@ public class HtmlDocletWriter {
         Content text = plainOrCode(kind == LINK_PLAIN, new RawHtml(seetext));
 
         TypeElement refClass = ch.getReferencedClass(see);
-        String refClassName =  ch.getReferencedClassName(see);
         Element refMem =       ch.getReferencedMember(see);
         String refMemName =    ch.getReferencedMemberName(see);
 
@@ -1031,6 +1017,10 @@ public class HtmlDocletWriter {
             refMemName = refMem.toString();
         }
         if (refClass == null) {
+            ModuleElement refModule = ch.getReferencedModule(see);
+            if (refModule != null && utils.isIncluded(refModule)) {
+                return getModuleLink(refModule, label.isEmpty() ? text : label);
+            }
             //@see is not referencing an included class
             PackageElement refPackage = ch.getReferencedPackage(see);
             if (refPackage != null && utils.isIncluded(refPackage)) {
@@ -1041,9 +1031,11 @@ public class HtmlDocletWriter {
                 return getPackageLink(refPackage, label);
             } else {
                 // @see is not referencing an included class, module or package. Check for cross links.
-                DocLink elementCrossLink = (configuration.extern.isModule(refClassName))
-                        ? getCrossModuleLink(utils.elementUtils.getModuleElement(refClassName)) :
-                        (refPackage != null) ? getCrossPackageLink(refPackage) : null;
+                String refModuleName =  ch.getReferencedModuleName(see);
+                DocLink elementCrossLink = (refPackage != null) ? getCrossPackageLink(refPackage) :
+                        (configuration.extern.isModule(refModuleName))
+                                ? getCrossModuleLink(utils.elementUtils.getModuleElement(refModuleName))
+                                : null;
                 if (elementCrossLink != null) {
                     // Element cross link found
                     return links.createLink(elementCrossLink,
@@ -1060,19 +1052,15 @@ public class HtmlDocletWriter {
         } else if (refMemName == null) {
             // Must be a class reference since refClass is not null and refMemName is null.
             if (label.isEmpty()) {
-                /*
-                 * it seems to me this is the right thing to do, but it causes comparator failures.
-                 */
-                if (!configuration.backwardCompatibility) {
-                    StringContent content = utils.isEnclosingPackageIncluded(refClass)
-                            ? new StringContent(utils.getSimpleName(refClass))
-                            : new StringContent(utils.getFullyQualifiedName(refClass));
-                    label = plainOrCode(isLinkPlain, content);
-                } else {
-                    label = plainOrCode(isLinkPlain,
-                            new StringContent(utils.getSimpleName(refClass)));
+                if (!refClass.getTypeParameters().isEmpty() && seetext.contains("<")) {
+                    // If this is a generic type link try to use the TypeMirror representation.
+                    TypeMirror refType = ch.getReferencedType(see);
+                    if (refType != null) {
+                        return plainOrCode(isLinkPlain, getLink(
+                                new LinkInfoImpl(configuration, LinkInfoImpl.Kind.DEFAULT, refType)));
+                    }
                 }
-
+                label = plainOrCode(isLinkPlain, new StringContent(utils.getSimpleName(refClass)));
             }
             return getLink(new LinkInfoImpl(configuration, LinkInfoImpl.Kind.DEFAULT, refClass)
                     .label(label));
@@ -1120,7 +1108,7 @@ public class HtmlDocletWriter {
             }
             if (utils.isExecutableElement(refMem)) {
                 if (refMemName.indexOf('(') < 0) {
-                    refMemName += utils.makeSignature((ExecutableElement)refMem, true);
+                    refMemName += utils.makeSignature((ExecutableElement) refMem, null, true);
                 }
                 if (overriddenMethod != null) {
                     // The method to actually link.
@@ -1133,6 +1121,10 @@ public class HtmlDocletWriter {
             return getDocLink(LinkInfoImpl.Kind.SEE_TAG, containing,
                     refMem, (label.isEmpty() ? text: label), false);
         }
+    }
+
+    private String removeTrailingSlash(String s) {
+        return s.endsWith("/") ? s.substring(0, s.length() -1) : s;
     }
 
     private Content plainOrCode(boolean plain, Content body) {
@@ -1608,8 +1600,7 @@ public class HtmlDocletWriter {
      * @return Return true if a relative link should not be redirected.
      */
     private boolean shouldNotRedirectRelativeLinks() {
-        return  this instanceof AnnotationTypeWriter ||
-                this instanceof ClassWriter ||
+        return  this instanceof ClassWriter ||
                 this instanceof PackageSummaryWriter;
     }
 

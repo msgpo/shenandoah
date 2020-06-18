@@ -34,6 +34,7 @@ import jdk.test.lib.process.OutputAnalyzer;
 
 /**
  * @test
+ * @key randomness
  * @bug 8208091
  * @requires (os.family == "linux") & (vm.hasSA)
  * @library /test/lib
@@ -131,6 +132,7 @@ public class TestJhsdbJstackMixed {
         for (int i = 0; i < MAX_ITERATIONS; i++) {
             JDKToolLauncher launcher = JDKToolLauncher
                     .createUsingTestJDK("jhsdb");
+            launcher.addVMArgs(Utils.getTestJavaOpts());
             launcher.addToolArg("jstack");
             launcher.addToolArg("--mixed");
             launcher.addToolArg("--pid");
@@ -172,7 +174,7 @@ public class TestJhsdbJstackMixed {
                 : Utils.getTestJavaOpts();
 
             app = new LingeredAppWithNativeMethod();
-            LingeredApp.startApp(app, vmArgs);
+            LingeredApp.startAppExactJvmOpts(app, vmArgs);
             System.out.println("Started LingeredApp with pid " + app.getPid());
             runJstackMixedInLoop(app);
             System.out.println("Test Completed");

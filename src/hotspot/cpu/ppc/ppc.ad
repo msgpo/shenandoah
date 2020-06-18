@@ -1,6 +1,6 @@
 //
-// Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
-// Copyright (c) 2012, 2019 SAP SE. All rights reserved.
+// Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2012, 2020 SAP SE. All rights reserved.
 // DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 //
 // This code is free software; you can redistribute it and/or modify it
@@ -982,10 +982,26 @@ source_hpp %{
 
 source %{
 
+void PhaseOutput::pd_perform_mach_node_analysis() {
+}
+
+int MachNode::pd_alignment_required() const {
+  return 1;
+}
+
+int MachNode::compute_padding(int current_offset) const {
+  return 0;
+}
+
+// Should the matcher clone input 'm' of node 'n'?
+bool Matcher::pd_clone_node(Node* n, Node* m, Matcher::MStack& mstack) {
+  return false;
+}
+
 // Should the Matcher clone shifts on addressing modes, expecting them
 // to be subsumed into complex addressing expressions or compute them
 // into registers?
-bool Matcher::clone_address_expressions(AddPNode* m, Matcher::MStack& mstack, VectorSet& address_visited) {
+bool Matcher::pd_clone_address_expressions(AddPNode* m, Matcher::MStack& mstack, VectorSet& address_visited) {
   return clone_base_plus_offset_address(m, mstack, address_visited);
 }
 
@@ -1589,11 +1605,7 @@ void MachEpilogNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
   }
 
   if (method_needs_polling) {
-    if (SafepointMechanism::uses_thread_local_poll()) {
-      __ ld(polling_page, in_bytes(JavaThread::polling_page_offset()), R16_thread);
-    } else {
-      __ load_const_optimized(polling_page, (long)(address) os::get_polling_page());
-    }
+    __ ld(polling_page, in_bytes(JavaThread::polling_page_offset()), R16_thread);
   }
 
   if (!method_is_frameless) {
@@ -1627,14 +1639,6 @@ int MachEpilogNode::reloc() const {
 
 const Pipeline * MachEpilogNode::pipeline() const {
   return MachNode::pipeline_class();
-}
-
-// This method seems to be obsolete. It is declared in machnode.hpp
-// and defined in all *.ad files, but it is never called. Should we
-// get rid of it?
-int MachEpilogNode::safepoint_offset() const {
-  assert(do_polling(), "no return for this epilog node");
-  return 0;
 }
 
 #if 0 // TODO: PPC port
@@ -2176,6 +2180,13 @@ class HandlerImpl {
 
 };
 
+class Node::PD {
+public:
+  enum NodeFlags {
+    _last_flag = Node::_last_flag
+  };
+};
+
 %} // end source_hpp
 
 source %{
@@ -2355,11 +2366,6 @@ const uint Matcher::vector_ideal_reg(int size) {
   }
 }
 
-const uint Matcher::vector_shift_count_ideal_reg(int size) {
-  fatal("vector shift is not supported");
-  return Node::NotAMachineReg;
-}
-
 // Limits on vector size (number of elements) loaded into vector.
 const int Matcher::max_vector_size(const BasicType bt) {
   assert(is_java_primitive(bt), "only primitive type vectors");
@@ -2440,7 +2446,7 @@ const bool Matcher::need_masked_shift_count = true;
 // No support for generic vector operands.
 const bool Matcher::supports_generic_vector_operands  = false;
 
-MachOper* Matcher::specialize_generic_vector_operand(MachOper* original_opnd, uint ideal_reg, bool is_temp) {
+MachOper* Matcher::pd_specialize_generic_vector_operand(MachOper* original_opnd, uint ideal_reg, bool is_temp) {
   ShouldNotReachHere(); // generic vector operands not supported
   return NULL;
 }
@@ -10879,14 +10885,6 @@ instruct castII(iRegIdst dst) %{
   ins_pipe(pipe_class_default);
 %}
 
-instruct castLL(iRegLdst dst) %{
-  match(Set dst (CastLL dst));
-  format %{ " -- \t// castLL of $dst" %}
-  size(0);
-  ins_encode( /*empty*/ );
-  ins_pipe(pipe_class_default);
-%}
-
 instruct checkCastPP(iRegPdst dst) %{
   match(Set dst (CheckCastPP dst));
   format %{ " -- \t// checkcastPP of $dst" %}
@@ -13726,6 +13724,24 @@ instruct bytes_reverse_int_Ex(iRegIdst dst, iRegIsrc src) %{
   %}
 %}
 
+instruct bytes_reverse_int_vec(iRegIdst dst, iRegIsrc src, vecX tmpV) %{
+  match(Set dst (ReverseBytesI src));
+  predicate(UseVectorByteReverseInstructionsPPC64);
+  effect(TEMP tmpV);
+  ins_cost(DEFAULT_COST*3);
+  size(12);
+  format %{ "MTVSRWZ $tmpV, $src\n"
+            "\tXXBRW   $tmpV, $tmpV\n"
+            "\tMFVSRWZ $dst, $tmpV" %}
+
+  ins_encode %{
+    __ mtvsrwz($tmpV$$VectorSRegister, $src$$Register);
+    __ xxbrw($tmpV$$VectorSRegister, $tmpV$$VectorSRegister);
+    __ mfvsrwz($dst$$Register, $tmpV$$VectorSRegister);
+  %}
+  ins_pipe(pipe_class_default);
+%}
+
 instruct bytes_reverse_long_Ex(iRegLdst dst, iRegLsrc src) %{
   match(Set dst (ReverseBytesL src));
   ins_cost(15*DEFAULT_COST);
@@ -13765,6 +13781,24 @@ instruct bytes_reverse_long_Ex(iRegLdst dst, iRegLsrc src) %{
   %}
 %}
 
+instruct bytes_reverse_long_vec(iRegLdst dst, iRegLsrc src, vecX tmpV) %{
+  match(Set dst (ReverseBytesL src));
+  predicate(UseVectorByteReverseInstructionsPPC64);
+  effect(TEMP tmpV);
+  ins_cost(DEFAULT_COST*3);
+  size(12);
+  format %{ "MTVSRD  $tmpV, $src\n"
+            "\tXXBRD   $tmpV, $tmpV\n"
+            "\tMFVSRD  $dst, $tmpV" %}
+
+  ins_encode %{
+    __ mtvsrd($tmpV$$VectorSRegister, $src$$Register);
+    __ xxbrd($tmpV$$VectorSRegister, $tmpV$$VectorSRegister);
+    __ mfvsrd($dst$$Register, $tmpV$$VectorSRegister);
+  %}
+  ins_pipe(pipe_class_default);
+%}
+
 instruct bytes_reverse_ushort_Ex(iRegIdst dst, iRegIsrc src) %{
   match(Set dst (ReverseBytesUS src));
   ins_cost(2*DEFAULT_COST);
@@ -13796,6 +13830,7 @@ instruct bytes_reverse_short_Ex(iRegIdst dst, iRegIsrc src) %{
 // Load Integer reversed byte order
 instruct loadI_reversed(iRegIdst dst, indirect mem) %{
   match(Set dst (ReverseBytesI (LoadI mem)));
+  predicate(n->in(1)->as_Load()->is_unordered() || followed_by_acquire(n->in(1)));
   ins_cost(MEMORY_REF_COST);
 
   size(4);
@@ -13805,10 +13840,23 @@ instruct loadI_reversed(iRegIdst dst, indirect mem) %{
   ins_pipe(pipe_class_default);
 %}
 
+instruct loadI_reversed_acquire(iRegIdst dst, indirect mem) %{
+  match(Set dst (ReverseBytesI (LoadI mem)));
+  ins_cost(2 * MEMORY_REF_COST);
+
+  size(12);
+  ins_encode %{
+    __ lwbrx($dst$$Register, $mem$$Register);
+    __ twi_0($dst$$Register);
+    __ isync();
+  %}
+  ins_pipe(pipe_class_default);
+%}
+
 // Load Long - aligned and reversed
 instruct loadL_reversed(iRegLdst dst, indirect mem) %{
   match(Set dst (ReverseBytesL (LoadL mem)));
-  predicate(VM_Version::has_ldbrx());
+  predicate(VM_Version::has_ldbrx() && (n->in(1)->as_Load()->is_unordered() || followed_by_acquire(n->in(1))));
   ins_cost(MEMORY_REF_COST);
 
   size(4);
@@ -13818,9 +13866,24 @@ instruct loadL_reversed(iRegLdst dst, indirect mem) %{
   ins_pipe(pipe_class_default);
 %}
 
+instruct loadL_reversed_acquire(iRegLdst dst, indirect mem) %{
+  match(Set dst (ReverseBytesL (LoadL mem)));
+  predicate(VM_Version::has_ldbrx());
+  ins_cost(2 * MEMORY_REF_COST);
+
+  size(12);
+  ins_encode %{
+    __ ldbrx($dst$$Register, $mem$$Register);
+    __ twi_0($dst$$Register);
+    __ isync();
+  %}
+  ins_pipe(pipe_class_default);
+%}
+
 // Load unsigned short / char reversed byte order
 instruct loadUS_reversed(iRegIdst dst, indirect mem) %{
   match(Set dst (ReverseBytesUS (LoadUS mem)));
+  predicate(n->in(1)->as_Load()->is_unordered() || followed_by_acquire(n->in(1)));
   ins_cost(MEMORY_REF_COST);
 
   size(4);
@@ -13830,15 +13893,43 @@ instruct loadUS_reversed(iRegIdst dst, indirect mem) %{
   ins_pipe(pipe_class_default);
 %}
 
+instruct loadUS_reversed_acquire(iRegIdst dst, indirect mem) %{
+  match(Set dst (ReverseBytesUS (LoadUS mem)));
+  ins_cost(2 * MEMORY_REF_COST);
+
+  size(12);
+  ins_encode %{
+    __ lhbrx($dst$$Register, $mem$$Register);
+    __ twi_0($dst$$Register);
+    __ isync();
+  %}
+  ins_pipe(pipe_class_default);
+%}
+
 // Load short reversed byte order
 instruct loadS_reversed(iRegIdst dst, indirect mem) %{
   match(Set dst (ReverseBytesS (LoadS mem)));
+  predicate(n->in(1)->as_Load()->is_unordered() || followed_by_acquire(n->in(1)));
   ins_cost(MEMORY_REF_COST + DEFAULT_COST);
 
   size(8);
   ins_encode %{
     __ lhbrx($dst$$Register, $mem$$Register);
     __ extsh($dst$$Register, $dst$$Register);
+  %}
+  ins_pipe(pipe_class_default);
+%}
+
+instruct loadS_reversed_acquire(iRegIdst dst, indirect mem) %{
+  match(Set dst (ReverseBytesS (LoadS mem)));
+  ins_cost(2 * MEMORY_REF_COST + DEFAULT_COST);
+
+  size(16);
+  ins_encode %{
+    __ lhbrx($dst$$Register, $mem$$Register);
+    __ twi_0($dst$$Register);
+    __ extsh($dst$$Register, $dst$$Register);
+    __ isync();
   %}
   ins_pipe(pipe_class_default);
 %}
@@ -15102,10 +15193,11 @@ instruct ShouldNotReachHere() %{
   ins_cost(CALL_COST);
 
   format %{ "ShouldNotReachHere" %}
-  size(4);
   ins_encode %{
-    // TODO: PPC port $archOpcode(ppc64Opcode_tdi);
-    __ trap_should_not_reach_here();
+    if (is_reachable()) {
+      // TODO: PPC port $archOpcode(ppc64Opcode_tdi);
+      __ stop(_halt_reason);
+    }
   %}
   ins_pipe(pipe_class_default);
 %}

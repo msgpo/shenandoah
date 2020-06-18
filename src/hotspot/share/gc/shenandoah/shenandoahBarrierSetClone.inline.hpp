@@ -72,35 +72,43 @@ public:
   virtual void do_oop(narrowOop* p) { do_oop_work(p); }
 };
 
-void ShenandoahBarrierSet::clone_barrier(oop obj) {
-  assert(ShenandoahCloneBarrier, "only get here with clone barriers enabled");
-
-  // This is called for cloning an object (see jvm.cpp) after the clone
-  // has been made. We are not interested in any 'previous value' because
-  // it would be NULL in any case. But we *are* interested in any oop*
-  // that potentially need to be updated.
-
-  shenandoah_assert_correct(NULL, obj);
-  if (_heap->is_concurrent_mark_in_progress() &&
-      ShenandoahStoreValEnqueueBarrier) {
-    ShenandoahUpdateRefsForOopClosure<false, false, true> cl;
+void ShenandoahBarrierSet::clone_marking(oop obj) {
+  assert(_heap->is_concurrent_mark_in_progress(), "only during marking");
+  assert(ShenandoahStoreValEnqueueBarrier, "only with incremental-update");
+  if (!_heap->marking_context()->allocated_after_mark_start(obj)) {
+    ShenandoahUpdateRefsForOopClosure</* has_fwd = */ false, /* evac = */ false, /* enqueue */ true> cl;
     obj->oop_iterate(&cl);
-    return;
   }
+}
 
-  if (skip_bulk_update(cast_from_oop<HeapWord*>(obj))) return;
-  if (_heap->is_evacuation_in_progress()) {
-    ShenandoahEvacOOMScope evac_scope;
+void ShenandoahBarrierSet::clone_evacuation(oop obj) {
+  assert(_heap->is_evacuation_in_progress(), "only during evacuation");
+  if (need_bulk_update(cast_from_oop<HeapWord*>(obj))) {
+    ShenandoahEvacOOMScope oom_evac_scope;
     ShenandoahUpdateRefsForOopClosure</* has_fwd = */ true, /* evac = */ true, /* enqueue */ false> cl;
     obj->oop_iterate(&cl);
-  } else if (_heap->is_concurrent_traversal_in_progress()) {
-    ShenandoahEvacOOMScope evac_scope;
-    ShenandoahUpdateRefsForOopClosure</* has_fwd = */ true, /* evac = */ true, /* enqueue */ true> cl;
-    obj->oop_iterate(&cl);
-  } else {
-    assert(_heap->has_forwarded_objects(), "only with forwarded objects");
+  }
+}
+
+void ShenandoahBarrierSet::clone_update(oop obj) {
+  assert(_heap->is_update_refs_in_progress(), "only during update-refs");
+  if (need_bulk_update(cast_from_oop<HeapWord*>(obj))) {
     ShenandoahUpdateRefsForOopClosure</* has_fwd = */ true, /* evac = */ false, /* enqueue */ false> cl;
     obj->oop_iterate(&cl);
+  }
+}
+
+void ShenandoahBarrierSet::clone_barrier(oop obj) {
+  assert(ShenandoahCloneBarrier, "only get here with clone barriers enabled");
+  shenandoah_assert_correct(NULL, obj);
+
+  int gc_state = _heap->gc_state();
+  if ((gc_state & ShenandoahHeap::MARKING) != 0) {
+    clone_marking(obj);
+  } else if ((gc_state & ShenandoahHeap::EVACUATION) != 0) {
+    clone_evacuation(obj);
+  } else {
+    clone_update(obj);
   }
 }
 

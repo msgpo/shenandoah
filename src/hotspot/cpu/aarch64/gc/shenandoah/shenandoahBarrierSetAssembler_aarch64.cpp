@@ -28,9 +28,9 @@
 #include "gc/shenandoah/shenandoahForwarding.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
-#include "gc/shenandoah/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahRuntime.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "interpreter/interpreter.hpp"
 #include "interpreter/interp_masm.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -49,17 +49,17 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
                                                        Register src, Register dst, Register count, RegSet saved_regs) {
   if (is_oop) {
     bool dest_uninitialized = (decorators & IS_DEST_UNINITIALIZED) != 0;
-    if ((ShenandoahSATBBarrier && !dest_uninitialized) || ShenandoahLoadRefBarrier) {
+    if ((ShenandoahSATBBarrier && !dest_uninitialized) || ShenandoahStoreValEnqueueBarrier || ShenandoahLoadRefBarrier) {
 
       Label done;
 
       // Avoid calling runtime if count == 0
       __ cbz(count, done);
 
-      // Is marking active?
+      // Is GC active?
       Address gc_state(rthread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
       __ ldrb(rscratch1, gc_state);
-      if (dest_uninitialized) {
+      if (ShenandoahSATBBarrier && dest_uninitialized) {
         __ tbz(rscratch1, ShenandoahHeap::HAS_FORWARDED_BITPOS, done);
       } else {
         __ mov(rscratch2, ShenandoahHeap::HAS_FORWARDED | ShenandoahHeap::MARKING);
@@ -69,17 +69,9 @@ void ShenandoahBarrierSetAssembler::arraycopy_prologue(MacroAssembler* masm, Dec
 
       __ push(saved_regs, sp);
       if (UseCompressedOops) {
-        if (dest_uninitialized) {
-          __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_ref_array_pre_duinit_narrow_oop_entry), src, dst, count);
-        } else {
-          __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_ref_array_pre_narrow_oop_entry), src, dst, count);
-        }
+        __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::arraycopy_barrier_narrow_oop_entry), src, dst, count);
       } else {
-        if (dest_uninitialized) {
-          __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_ref_array_pre_duinit_oop_entry), src, dst, count);
-        } else {
-          __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_ref_array_pre_oop_entry), src, dst, count);
-        }
+        __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::arraycopy_barrier_oop_entry), src, dst, count);
       }
       __ pop(saved_regs, sp);
       __ bind(done);
@@ -616,7 +608,7 @@ void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAss
   // Is marking still active?
   Address gc_state(thread, in_bytes(ShenandoahThreadLocalData::gc_state_offset()));
   __ ldrb(tmp, gc_state);
-  __ mov(rscratch2, ShenandoahHeap::MARKING | ShenandoahHeap::TRAVERSAL);
+  __ mov(rscratch2, ShenandoahHeap::MARKING);
   __ tst(tmp, rscratch2);
   __ br(Assembler::EQ, done);
 
@@ -691,23 +683,11 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
   StubCodeMark mark(cgen, "StubRoutines", "shenandoah_lrb");
   address start = __ pc();
 
-  Label work, done;
+  Label slow_path;
   __ mov(rscratch2, ShenandoahHeap::in_cset_fast_test_addr());
   __ lsr(rscratch1, r0, ShenandoahHeapRegion::region_size_bytes_shift_jint());
   __ ldrb(rscratch2, Address(rscratch2, rscratch1));
-  __ tbnz(rscratch2, 0, work);
-  __ ret(lr);
-  __ bind(work);
-
-  Label slow_path;
-  __ ldr(rscratch1, Address(r0, oopDesc::mark_offset_in_bytes()));
-  __ eon(rscratch1, rscratch1, zr);
-  __ ands(zr, rscratch1, markWord::lock_mask_in_place);
-  __ br(Assembler::NE, slow_path);
-
-  // Decode forwarded object.
-  __ orr(rscratch1, rscratch1, markWord::marked_value);
-  __ eon(r0, rscratch1, zr);
+  __ tbnz(rscratch2, 0, slow_path);
   __ ret(lr);
 
   __ bind(slow_path);
@@ -726,7 +706,6 @@ address ShenandoahBarrierSetAssembler::generate_shenandoah_lrb(StubCodeGenerator
   __ mov(r0, rscratch1);
 
   __ leave(); // required for proper stackwalking of RuntimeStub frame
-  __ bind(done);
   __ ret(lr);
 
   return start;

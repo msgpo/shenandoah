@@ -164,10 +164,10 @@
   experimental(bool, UseEpsilonGC, false,                                   \
           "Use the Epsilon (no-op) garbage collector")                      \
                                                                             \
-  experimental(bool, UseZGC, false,                                         \
+  product(bool, UseZGC, false,                                              \
           "Use the Z garbage collector")                                    \
                                                                             \
-  experimental(bool, UseShenandoahGC, false,                                \
+  product(bool, UseShenandoahGC, false,                                     \
           "Use the Shenandoah garbage collector")                           \
                                                                             \
   product(uint, ParallelGCThreads, 0,                                       \
@@ -419,9 +419,6 @@
                                                                             \
   product(bool, UseAdaptiveSizePolicyWithSystemGC, false,                   \
           "Include statistics from System.gc() for adaptive size policy")   \
-                                                                            \
-  product(bool, UseAdaptiveGCBoundary, false,                               \
-          "Allow young-old boundary to move")                               \
                                                                             \
   develop(intx, PSAdaptiveSizePolicyResizeVirtualSpaceAlot, -1,             \
           "Resize the virtual spaces of the young or old generations")      \

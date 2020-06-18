@@ -26,7 +26,7 @@
 
 #include "gc/shenandoah/heuristics/shenandoahAggressiveHeuristics.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.hpp"
-#include "gc/shenandoah/shenandoahHeapRegion.hpp"
+#include "gc/shenandoah/shenandoahHeapRegion.inline.hpp"
 #include "logging/log.hpp"
 #include "logging/logTag.hpp"
 #include "runtime/os.hpp"
@@ -72,16 +72,4 @@ bool ShenandoahAggressiveHeuristics::should_unload_classes() {
   if (has_metaspace_oom()) return true;
   // Randomly unload classes with 50% chance.
   return (os::random() & 1) == 1;
-}
-
-const char* ShenandoahAggressiveHeuristics::name() {
-  return "aggressive";
-}
-
-bool ShenandoahAggressiveHeuristics::is_diagnostic() {
-  return true;
-}
-
-bool ShenandoahAggressiveHeuristics::is_experimental() {
-  return false;
 }

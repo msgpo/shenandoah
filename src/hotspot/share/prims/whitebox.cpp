@@ -27,6 +27,7 @@
 #include <new>
 
 #include "classfile/classLoaderDataGraph.hpp"
+#include "classfile/javaClasses.inline.hpp"
 #include "classfile/modules.hpp"
 #include "classfile/protectionDomainCache.hpp"
 #include "classfile/stringTable.hpp"
@@ -72,6 +73,7 @@
 #include "runtime/jniHandles.inline.hpp"
 #include "runtime/os.hpp"
 #include "runtime/sweeper.hpp"
+#include "runtime/synchronizer.hpp"
 #include "runtime/thread.hpp"
 #include "runtime/threadSMR.hpp"
 #include "runtime/vm_version.hpp"
@@ -94,7 +96,6 @@
 #endif // INCLUDE_G1GC
 #if INCLUDE_PARALLELGC
 #include "gc/parallel/parallelScavengeHeap.inline.hpp"
-#include "gc/parallel/adjoiningGenerations.hpp"
 #endif // INCLUDE_PARALLELGC
 #if INCLUDE_NMT
 #include "services/mallocSiteTable.hpp"
@@ -477,6 +478,12 @@ WB_END
 
 WB_ENTRY(jboolean, WB_G1StartMarkCycle(JNIEnv* env, jobject o))
   if (UseG1GC) {
+    if (AsyncDeflateIdleMonitors) {
+      // AsyncDeflateIdleMonitors needs to know when System.gc() or
+      // the equivalent is called so any special clean up can be done
+      // at a safepoint, e.g., TestHumongousClassLoader.java.
+      ObjectSynchronizer::set_is_special_deflation_requested(true);
+    }
     G1CollectedHeap* g1h = G1CollectedHeap::heap();
     if (!g1h->concurrent_mark()->cm_thread()->during_cycle()) {
       g1h->collect(GCCause::_wb_conc_mark);
@@ -607,7 +614,7 @@ WB_END
 
 WB_ENTRY(jlong, WB_PSVirtualSpaceAlignment(JNIEnv* env, jobject o))
   if (UseParallelGC) {
-    return ParallelScavengeHeap::heap()->gens()->virtual_spaces()->alignment();
+    return GenAlignment;
   }
   THROW_MSG_0(vmSymbols::java_lang_UnsupportedOperationException(), "WB_PSVirtualSpaceAlignment: Parallel GC is not enabled");
 WB_END
@@ -1448,6 +1455,12 @@ WB_ENTRY(jboolean, WB_IsInStringTable(JNIEnv* env, jobject o, jstring javaString
 WB_END
 
 WB_ENTRY(void, WB_FullGC(JNIEnv* env, jobject o))
+  if (AsyncDeflateIdleMonitors) {
+    // AsyncDeflateIdleMonitors needs to know when System.gc() or
+    // the equivalent is called so any special clean up can be done
+    // at a safepoint, e.g., TestHumongousClassLoader.java.
+    ObjectSynchronizer::set_is_special_deflation_requested(true);
+  }
   Universe::heap()->soft_ref_policy()->set_should_clear_all_soft_refs(true);
   Universe::heap()->collect(GCCause::_wb_full_gc);
 #if INCLUDE_G1GC
@@ -1716,52 +1729,19 @@ WB_END
 
 WB_ENTRY(void, WB_DefineModule(JNIEnv* env, jobject o, jobject module, jboolean is_open,
                                 jstring version, jstring location, jobjectArray packages))
-  ResourceMark rm(THREAD);
-
-  objArrayOop packages_oop = objArrayOop(JNIHandles::resolve(packages));
-  objArrayHandle packages_h(THREAD, packages_oop);
-  int num_packages = (packages_h == NULL ? 0 : packages_h->length());
-
-  char** pkgs = NULL;
-  if (num_packages > 0) {
-    pkgs = NEW_RESOURCE_ARRAY_IN_THREAD(THREAD, char*, num_packages);
-    for (int x = 0; x < num_packages; x++) {
-      oop pkg_str = packages_h->obj_at(x);
-      if (pkg_str == NULL || !pkg_str->is_a(SystemDictionary::String_klass())) {
-        THROW_MSG(vmSymbols::java_lang_IllegalArgumentException(),
-                  err_msg("Bad package name"));
-      }
-      pkgs[x] = java_lang_String::as_utf8_string(pkg_str);
-    }
-  }
-  Modules::define_module(module, is_open, version, location, (const char* const*)pkgs, num_packages, CHECK);
+  Modules::define_module(module, is_open, version, location, packages, CHECK);
 WB_END
 
 WB_ENTRY(void, WB_AddModuleExports(JNIEnv* env, jobject o, jobject from_module, jstring package, jobject to_module))
-  ResourceMark rm(THREAD);
-  char* package_name = NULL;
-  if (package != NULL) {
-      package_name = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(package));
-  }
-  Modules::add_module_exports_qualified(from_module, package_name, to_module, CHECK);
+  Modules::add_module_exports_qualified(from_module, package, to_module, CHECK);
 WB_END
 
 WB_ENTRY(void, WB_AddModuleExportsToAllUnnamed(JNIEnv* env, jobject o, jclass module, jstring package))
-  ResourceMark rm(THREAD);
-  char* package_name = NULL;
-  if (package != NULL) {
-      package_name = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(package));
-  }
-  Modules::add_module_exports_to_all_unnamed(module, package_name, CHECK);
+  Modules::add_module_exports_to_all_unnamed(module, package, CHECK);
 WB_END
 
 WB_ENTRY(void, WB_AddModuleExportsToAll(JNIEnv* env, jobject o, jclass module, jstring package))
-  ResourceMark rm(THREAD);
-  char* package_name = NULL;
-  if (package != NULL) {
-      package_name = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(package));
-  }
-  Modules::add_module_exports(module, package_name, NULL, CHECK);
+  Modules::add_module_exports(module, package, NULL, CHECK);
 WB_END
 
 WB_ENTRY(void, WB_AddReadsModule(JNIEnv* env, jobject o, jobject from_module, jobject source_module))
@@ -1830,6 +1810,13 @@ WB_ENTRY(jboolean, WB_IsMonitorInflated(JNIEnv* env, jobject wb, jobject obj))
 WB_END
 
 WB_ENTRY(void, WB_ForceSafepoint(JNIEnv* env, jobject wb))
+  if (AsyncDeflateIdleMonitors) {
+    // AsyncDeflateIdleMonitors needs to know when System.gc() or
+    // the equivalent is called so any special clean up can be done
+    // at a safepoint, e.g., TestRTMTotalCountIncrRate.java or
+    // TestUseRTMForStackLocks.java.
+    ObjectSynchronizer::set_is_special_deflation_requested(true);
+  }
   VM_ForceSafepoint force_safepoint_op;
   VMThread::execute(&force_safepoint_op);
 WB_END
@@ -2255,6 +2242,60 @@ WB_ENTRY(jint, WB_GetKlassMetadataSize(JNIEnv* env, jobject wb, jclass mirror))
   return k->size() * wordSize;
 WB_END
 
+// See test/hotspot/jtreg/runtime/Thread/ThreadObjAccessAtExit.java.
+// It explains how the thread's priority field is used for test state coordination.
+//
+WB_ENTRY(void, WB_CheckThreadObjOfTerminatingThread(JNIEnv* env, jobject wb, jobject target_handle))
+  oop target_oop = JNIHandles::resolve_non_null(target_handle);
+  jlong tid = java_lang_Thread::thread_id(target_oop);
+  JavaThread* target = java_lang_Thread::thread(target_oop);
+
+  // Grab a ThreadsListHandle to protect the target thread whilst terminating
+  ThreadsListHandle tlh;
+
+  // Look up the target thread by tid to ensure it is present
+  JavaThread* t = tlh.list()->find_JavaThread_from_java_tid(tid);
+  if (t == NULL) {
+    THROW_MSG(vmSymbols::java_lang_RuntimeException(), "Target thread not found in ThreadsList!");
+  }
+
+  tty->print_cr("WB_CheckThreadObjOfTerminatingThread: target thread is protected");
+  // Allow target to terminate by boosting priority
+  java_lang_Thread::set_priority(t->threadObj(), ThreadPriority(NormPriority + 1));
+
+  // Now wait for the target to terminate
+  while (!target->is_terminated()) {
+    ThreadBlockInVM tbivm(thread);  // just in case target is involved in a safepoint
+    os::naked_short_sleep(0);
+  }
+
+  tty->print_cr("WB_CheckThreadObjOfTerminatingThread: target thread is terminated");
+
+  // Now release the GC inducing thread - we have to re-resolve the external oop that
+  // was passed in as GC may have occurred and we don't know if we can trust t->threadObj() now.
+  oop original = JNIHandles::resolve_non_null(target_handle);
+  java_lang_Thread::set_priority(original, ThreadPriority(NormPriority + 2));
+
+  tty->print_cr("WB_CheckThreadObjOfTerminatingThread: GC has been initiated - checking threadObj:");
+
+  // The Java code should be creating garbage and triggering GC, which would potentially move
+  // the threadObj oop. If the exiting thread is properly protected then its threadObj should
+  // remain valid and equal to our initial target_handle. Loop a few times to give GC a chance to
+  // kick in.
+  for (int i = 0; i < 5; i++) {
+    oop original = JNIHandles::resolve_non_null(target_handle);
+    oop current = t->threadObj();
+    if (original != current) {
+      tty->print_cr("WB_CheckThreadObjOfTerminatingThread: failed comparison on iteration %d", i);
+      THROW_MSG(vmSymbols::java_lang_RuntimeException(), "Target thread oop has changed!");
+    } else {
+      tty->print_cr("WB_CheckThreadObjOfTerminatingThread: successful comparison on iteration %d", i);
+      ThreadBlockInVM tbivm(thread);
+      os::naked_short_sleep(50);
+    }
+  }
+WB_END
+
 #define CC (char*)
 
 static JNINativeMethod methods[] = {
@@ -2480,6 +2521,7 @@ static JNINativeMethod methods[] = {
 
   {CC"clearInlineCaches0",  CC"(Z)V",                 (void*)&WB_ClearInlineCaches },
   {CC"handshakeWalkStack", CC"(Ljava/lang/Thread;Z)I", (void*)&WB_HandshakeWalkStack },
+  {CC"checkThreadObjOfTerminatingThread", CC"(Ljava/lang/Thread;)V", (void*)&WB_CheckThreadObjOfTerminatingThread },
   {CC"addCompilerDirective",    CC"(Ljava/lang/String;)I",
                                                       (void*)&WB_AddCompilerDirective },
   {CC"removeCompilerDirective",   CC"(I)V",           (void*)&WB_RemoveCompilerDirective },

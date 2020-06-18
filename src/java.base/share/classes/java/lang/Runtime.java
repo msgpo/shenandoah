@@ -757,8 +757,8 @@ public class Runtime {
      * for more details.
      *
      * Otherwise, the libname argument is loaded from a system library
-     * location and mapped to a native library image in an implementation-
-     * dependent manner.
+     * location and mapped to a native library image in an
+     * implementation-dependent manner.
      * <p>
      * First, if there is a security manager, its {@code checkLink}
      * method is called with the {@code libname} as its argument.
@@ -1046,7 +1046,7 @@ public class Runtime {
                 } else {
                     if (optional.isPresent() && !pre.isPresent()) {
                         throw new IllegalArgumentException("optional component"
-                            + " must be preceeded by a pre-release component"
+                            + " must be preceded by a pre-release component"
                             + " or '+': '" + s + "'");
                     }
                 }

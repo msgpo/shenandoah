@@ -1858,6 +1858,8 @@ public class ObjectInputStream
                 break;
             case TC_REFERENCE:
                 descriptor = (ObjectStreamClass) readHandle(unshared);
+                // Should only reference initialized class descriptors
+                descriptor.checkInitialized();
                 break;
             case TC_PROXYCLASSDESC:
                 descriptor = readProxyDesc(unshared);
@@ -2184,7 +2186,8 @@ public class ObjectInputStream
         if (isRecord) {
             assert obj == null;
             obj = readRecord(desc);
-            handles.setObject(passHandle, obj);
+            if (!unshared)
+                handles.setObject(passHandle, obj);
         } else if (desc.isExternalizable()) {
             readExternalData((Externalizable) obj, desc);
         } else {

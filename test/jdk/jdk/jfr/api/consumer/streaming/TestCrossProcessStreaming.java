@@ -27,7 +27,6 @@ package jdk.jfr.api.consumer.streaming;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +35,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import jdk.jfr.Event;
 import jdk.jfr.Name;
-import jdk.jfr.Recording;
 import jdk.jfr.consumer.EventStream;
 import jdk.test.lib.Asserts;
 import jdk.test.lib.jfr.StreamingUtils;
@@ -99,7 +97,7 @@ public class TestCrossProcessStreaming {
         // Consume events until 'exit' signal.
         AtomicInteger total = new AtomicInteger();
         AtomicInteger produced = new AtomicInteger(-1);
-        AtomicReference<Exception> exception = new AtomicReference();
+        AtomicReference<Exception> exception = new AtomicReference<>();
         try (EventStream es = EventStream.openRepository(repo)) {
             es.onEvent("Batch2", e -> {
                     try {
@@ -127,13 +125,18 @@ public class TestCrossProcessStreaming {
     }
 
     static class EventProducer {
+        private static final String MAIN_STARTED = "MAIN_STARTED";
+
         static Process start() throws Exception {
             String[] args = {"-XX:StartFlightRecording", EventProducer.class.getName()};
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(false, args);
-            return ProcessTools.startProcess("Event-Producer", pb);
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(args);
+            return ProcessTools.startProcess("Event-Producer", pb,
+                                             line -> line.contains(MAIN_STARTED),
+                                             0, TimeUnit.SECONDS);
         }
 
         public static void main(String... args) throws Exception {
+            System.out.println(MAIN_STARTED);
             ResultEvent rs = new ResultEvent();
             rs.batch1Count = emit(TestEvent1.class, "second-batch");
             rs.batch2Count = emit(TestEvent2.class, "exit");

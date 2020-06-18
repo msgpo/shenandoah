@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -252,29 +252,23 @@ class ClassLoader: AllStatic {
   static void load_zip_library();
   static void load_jimage_library();
 
+ private:
+  static int  _libzip_loaded; // used to sync loading zip.
+  static void release_load_zip_library();
+  static inline void load_zip_library_if_needed();
+
  public:
   static ClassPathEntry* create_class_path_entry(const char *path, const struct stat* st,
                                                  bool throw_exception,
                                                  bool is_boot_append,
                                                  bool from_class_path_attr, TRAPS);
 
-  // If the package for InstanceKlass is in the boot loader's package entry
-  // table then add_package() sets the classpath_index field so that
-  // get_system_package() will know to return a non-null value for the
-  // package's location.  And, so that the package will be added to the list of
-  // packages returned by get_system_packages().
-  // For packages whose classes are loaded from the boot loader class path, the
-  // classpath_index indicates which entry on the boot loader class path.
-  static bool add_package(const InstanceKlass* ik, s2 classpath_index, TRAPS);
-
   // Canonicalizes path names, so strcmp will work properly. This is mainly
   // to avoid confusing the zip library
   static bool get_canonical_path(const char* orig, char* out, int len);
   static const char* file_name_for_class_name(const char* class_name,
                                               int class_name_len);
-  static PackageEntry* get_package_entry(Symbol* pkg_name, ClassLoaderData* loader_data, TRAPS);
-
- public:
+  static PackageEntry* get_package_entry(Symbol* pkg_name, ClassLoaderData* loader_data);
   static int crc32(int crc, const char* buf, int len);
   static bool update_class_path_entry_list(const char *path,
                                            bool check_for_duplicates,
@@ -394,16 +388,7 @@ class ClassLoader: AllStatic {
 
   // Helper function used by CDS code to get the number of module path
   // entries during shared classpath setup time.
-  static int num_module_path_entries() {
-    Arguments::assert_is_dumping_archive();
-    int num_entries = 0;
-    ClassPathEntry* e= ClassLoader::_module_path_entries;
-    while (e != NULL) {
-      num_entries ++;
-      e = e->next();
-    }
-    return num_entries;
-  }
+  static int num_module_path_entries();
   static void  exit_with_path_failure(const char* error, const char* message);
   static char* skip_uri_protocol(char* source);
   static void  record_result(InstanceKlass* ik, const ClassFileStream* stream, TRAPS);

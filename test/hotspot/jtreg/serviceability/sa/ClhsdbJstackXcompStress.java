@@ -22,11 +22,8 @@
  * questions.
  */
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import jdk.test.lib.JDKToolLauncher;
@@ -39,6 +36,7 @@ import jdk.test.lib.process.OutputAnalyzer;
  * @test
  * @bug 8196969
  * @requires vm.hasSA
+ * @requires vm.opt.DeoptimizeALot != true
  * @library /test/lib
  * @run main/othervm ClhsdbJstackXcompStress
  */
@@ -60,6 +58,7 @@ public class ClhsdbJstackXcompStress {
         for (int i = 0; i < MAX_ITERATIONS; i++) {
             JDKToolLauncher launcher = JDKToolLauncher
                     .createUsingTestJDK("jhsdb");
+            launcher.addVMArgs(Utils.getFilteredTestJavaOpts("-showversion", "-Xcomp"));
             launcher.addToolArg("jstack");
             launcher.addToolArg("--pid");
             launcher.addToolArg(Long.toString(app.getPid()));
@@ -75,7 +74,7 @@ public class ClhsdbJstackXcompStress {
                 System.err.println(out.getStderr());
             }
 
-            out.stderrShouldBeEmpty(); // NPE's are reported on the err stream
+            out.stderrShouldBeEmptyIgnoreVMWarnings();
             out.stdoutShouldNotContain("Error occurred during stack walking:");
             out.stdoutShouldContain(LingeredAppWithRecComputation.THREAD_NAME);
             List<String> stdoutList = Arrays.asList(out.getStdout().split("\\R"));

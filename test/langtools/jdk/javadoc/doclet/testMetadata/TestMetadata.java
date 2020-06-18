@@ -23,7 +23,7 @@
 
 /*
  * @test
- * @bug 8218998 8219946 8219060 8241190
+ * @bug 8218998 8219946 8219060 8241190 8242056
  * @summary Add metadata to generated API documentation files
  * @library /tools/lib ../../lib
  * @modules jdk.javadoc/jdk.javadoc.internal.tool
@@ -96,18 +96,23 @@ public class TestMetadata extends JavadocTester {
                      switch (s) {
                          case PACKAGES:
                              checkOutput("pA/package-summary.html", true,
-                                     "<meta name=\"description\" content=\"declaration: package: pA\">");
+                                     """
+                                         <meta name="description" content="declaration: package: pA">""");
                              checkOutput("pA/CA.html", true,
-                                     "<meta name=\"description\" content=\"declaration: package: pA, class: CA\">");
+                                     """
+                                         <meta name="description" content="declaration: package: pA, class: CA">""");
                              break;
 
                          case MODULES:
                              checkOutput("mA/module-summary.html", true,
-                                     "<meta name=\"description\" content=\"declaration: module: mA\">");
+                                     """
+                                         <meta name="description" content="declaration: module: mA">""");
                              checkOutput("mA/pA/package-summary.html", true,
-                                     "<meta name=\"description\" content=\"declaration: module: mA, package: pA\">");
+                                     """
+                                         <meta name="description" content="declaration: module: mA, package: pA">""");
                              checkOutput("mA/pA/CA.html", true,
-                                     "<meta name=\"description\" content=\"declaration: module: mA, package: pA, class: CA\">");
+                                     """
+                                         <meta name="description" content="declaration: module: mA, package: pA, class: CA">""");
                              break;
                      }
                  }
@@ -206,7 +211,6 @@ public class TestMetadata extends JavadocTester {
     final Set<String> allGenerators = Set.of(
             "AllClassesIndexWriter",
             "AllPackagesIndexWriter",
-            "AnnotationTypeWriterImpl",
             "ClassUseWriter",
             "ClassWriterImpl",
             "ConstantsSummaryWriterImpl",
@@ -245,13 +249,15 @@ public class TestMetadata extends JavadocTester {
         String generator;
         switch (generators.size()) {
             case 0:
-                 failed("Not found: <meta name=\"generator\"");
+                 failed("""
+                     Not found: <meta name="generator\"""");
                  return;
             case 1:
                  generator = generators.get(0);
                  break;
             default:
-                 failed("Multiple found: <meta name=\"generator\"");
+                 failed("""
+                     Multiple found: <meta name="generator\"""");
                  return;
         }
 
@@ -284,14 +290,16 @@ public class TestMetadata extends JavadocTester {
                 if (generator.equals("DocFileWriter")) {
                     passed("Not found, as expected");
                 } else {
-                    failed("Not found: <meta name=\"description\"");
+                    failed("""
+                        Not found: <meta name="description\"""");
                 }
                 return;
             case 1:
                 description = descriptions.get(0);
                 break;
             default:
-                failed("Multiple found: <meta name=\"description\"");
+                failed("""
+                    Multiple found: <meta name="description\"""");
                 return;
         }
 
@@ -393,7 +401,9 @@ public class TestMetadata extends JavadocTester {
                     "/** Package pB. */ package pB;",
                     "/** Class pB.CB. */ package pB; public class CB { }");
                 tb.writeFile(src.resolve("pA").resolve("doc-files").resolve("extra.html"),
-                        "<!doctype html>\n<html><head></head><body>Extra</body></html>");
+                        """
+                            <!doctype html>
+                            <html><head></head><body>Extra</body></html>""");
                 break;
 
             case MODULES:

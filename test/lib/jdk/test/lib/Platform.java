@@ -23,9 +23,9 @@
 
 package jdk.test.lib;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.AccessController;
@@ -113,10 +113,6 @@ public class Platform {
         return isOs("mac");
     }
 
-    public static boolean isSolaris() {
-        return isOs("sunos");
-    }
-
     public static boolean isWindows() {
         return isOs("win");
     }
@@ -149,14 +145,14 @@ public class Platform {
     }
 
     // Returns major version number from os.version system property.
-    // E.g. 5 on Solaris 10 and 3 on SLES 11.3 (for the linux kernel version).
+    // E.g. 3 on SLES 11.3 (for the linux kernel version).
     public static int getOsVersionMajor() {
         if (osVersionMajor == -1) init_version();
         return osVersionMajor;
     }
 
     // Returns minor version number from os.version system property.
-    // E.g. 10 on Solaris 10 and 0 on SLES 11.3 (for the linux kernel version).
+    // E.g. 0 on SLES 11.3 (for the linux kernel version).
     public static int getOsVersionMinor() {
         if (osVersionMinor == -1) init_version();
         return osVersionMinor;
@@ -195,13 +191,8 @@ public class Platform {
         return isArch("s390.*") || isArch("s/390.*") || isArch("zArch_64");
     }
 
-    // Returns true for sparc and sparcv9.
-    public static boolean isSparc() {
-        return isArch("sparc.*");
-    }
-
     public static boolean isX64() {
-        // On OSX it's 'x86_64' and on other (Linux, Windows and Solaris) platforms it's 'amd64'
+        // On OSX it's 'x86_64' and on other (Linux and Windows) platforms it's 'amd64'
         return isArch("(amd64)|(x86_64)");
     }
 
@@ -248,7 +239,7 @@ public class Platform {
         String jdkPath = System.getProperty("java.home");
         Path javaPath = Paths.get(jdkPath + "/bin/java");
         String javaFileName = javaPath.toAbsolutePath().toString();
-        if (!javaPath.toFile().exists()) {
+        if (Files.notExists(javaPath)) {
             throw new FileNotFoundException("Could not find file " + javaFileName);
         }
 
@@ -323,19 +314,22 @@ public class Platform {
     }
 
     /**
+     * Returns absolute path to directory containing shared libraries in the tested JDK.
+     */
+    public static Path libDir() {
+        Path dir = Paths.get(testJdk);
+        if (Platform.isWindows()) {
+            return dir.resolve("bin").toAbsolutePath();
+        } else {
+            return dir.resolve("lib").toAbsolutePath();
+        }
+    }
+
+    /**
      * Returns absolute path to directory containing JVM shared library.
      */
     public static Path jvmLibDir() {
-        Path dir = Paths.get(testJdk);
-        if (Platform.isWindows()) {
-            return dir.resolve("bin")
-                .resolve(variant())
-                .toAbsolutePath();
-        } else {
-            return dir.resolve("lib")
-                .resolve(variant())
-                .toAbsolutePath();
-        }
+        return libDir().resolve(variant());
     }
 
     private static String variant() {
@@ -356,7 +350,6 @@ public class Platform {
                 isServer() &&
                 (isLinux()   ||
                  isOSX()     ||
-                 isSolaris() ||
                  isWindows()) &&
                 !isZero()    &&
                 !isMinimal() &&
@@ -368,6 +361,6 @@ public class Platform {
      * This should match the #if condition in ClassListParser::load_class_from_source().
      */
     public static boolean areCustomLoadersSupportedForCDS() {
-        return (is64bit() && (isLinux() || isSolaris() || isOSX()));
+        return (is64bit() && (isLinux() || isOSX()));
     }
 }

@@ -21,28 +21,20 @@
  * questions.
  */
 
-import java.util.ArrayList;
-import java.util.List;
 import java.io.File;
-import java.nio.file.Files;
 import java.io.IOException;
 import java.io.BufferedInputStream;
 import java.util.stream.Collectors;
 import java.io.FileInputStream;
 
-import sun.jvm.hotspot.HotSpotAgent;
-import sun.jvm.hotspot.debugger.*;
 
 import jdk.test.lib.apps.LingeredApp;
 import jdk.test.lib.Asserts;
 import jdk.test.lib.JDKToolLauncher;
-import jdk.test.lib.JDKToolFinder;
-import jdk.test.lib.Platform;
 import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.process.OutputAnalyzer;
 import jdk.test.lib.SA.SATestUtils;
 import jdk.test.lib.Utils;
-import jdk.test.lib.hprof.HprofParser;
 import jdk.test.lib.hprof.parser.HprofReader;
 import jdk.test.lib.hprof.parser.PositionDataInputStream;
 import jdk.test.lib.hprof.model.Snapshot;
@@ -91,6 +83,7 @@ public class TestHeapDumpForInvokeDynamic {
                                             long lingeredAppPid) throws Exception {
 
         JDKToolLauncher launcher = JDKToolLauncher.createUsingTestJDK("jhsdb");
+        launcher.addVMArgs(Utils.getTestJavaOpts());
         launcher.addToolArg("jmap");
         launcher.addToolArg("--binaryheap");
         launcher.addToolArg("--dumpfile");
@@ -121,12 +114,8 @@ public class TestHeapDumpForInvokeDynamic {
         }
 
         try {
-            String[] vmArgs = Utils.appendTestJavaOpts(
-                "-XX:+UsePerfData",
-                "-Xmx512m");
-
             theApp = new LingeredAppWithInvokeDynamic();
-            LingeredApp.startApp(theApp, vmArgs);
+            LingeredApp.startApp(theApp, "-XX:+UsePerfData", "-Xmx512m");
             attachDumpAndVerify(heapDumpFileName, theApp.getPid());
         } finally {
             LingeredApp.stopApp(theApp);

@@ -52,13 +52,19 @@ public:
   virtual void task();
 };
 
+// Periodic task to notify blocked paced waiters.
+class ShenandoahPeriodicPacerNotify : public PeriodicTask {
+public:
+  ShenandoahPeriodicPacerNotify() : PeriodicTask(PeriodicTask::min_interval) {}
+  virtual void task();
+};
+
 class ShenandoahControlThread: public ConcurrentGCThread {
   friend class VMStructs;
 
 private:
   typedef enum {
     none,
-    concurrent_traversal,
     concurrent_normal,
     stw_degenerated,
     stw_full
@@ -71,6 +77,7 @@ private:
   Monitor _gc_waiters_lock;
   ShenandoahPeriodicTask _periodic_task;
   ShenandoahPeriodicSATBFlushTask _periodic_satb_flush_task;
+  ShenandoahPeriodicPacerNotify _periodic_pacer_notify_task;
 
 public:
   void run_service();
@@ -89,17 +96,22 @@ private:
   shenandoah_padding(0);
   volatile size_t _allocs_seen;
   shenandoah_padding(1);
+  volatile size_t _gc_id;
+  shenandoah_padding(2);
 
   bool check_cancellation_or_degen(ShenandoahHeap::ShenandoahDegenPoint point);
   void service_concurrent_normal_cycle(GCCause::Cause cause);
   void service_stw_full_cycle(GCCause::Cause cause);
   void service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahHeap::ShenandoahDegenPoint point);
-  void service_concurrent_traversal_cycle(GCCause::Cause cause);
   void service_uncommit(double shrink_before);
 
   bool try_set_alloc_failure_gc();
   void notify_alloc_failure_waiters();
   bool is_alloc_failure_gc();
+
+  void reset_gc_id();
+  void update_gc_id();
+  size_t get_gc_id();
 
   void notify_gc_waiters();
 
@@ -115,7 +127,7 @@ public:
 
   // Handle allocation failure from normal allocation.
   // Blocks until memory is available.
-  void handle_alloc_failure(size_t words);
+  void handle_alloc_failure(ShenandoahAllocRequest& req);
 
   // Handle allocation failure from evacuation path.
   // Optionally blocks while collector is handling the failure.

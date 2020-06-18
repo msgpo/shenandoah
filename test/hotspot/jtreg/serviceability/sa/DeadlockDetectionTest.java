@@ -31,8 +31,6 @@
  * @run main DeadlockDetectionTest
  */
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.Collectors;
 
 import jdk.test.lib.apps.LingeredApp;
@@ -51,6 +49,7 @@ public class DeadlockDetectionTest {
 
     private static OutputAnalyzer jstack(String... toolArgs) throws Exception {
         JDKToolLauncher launcher = JDKToolLauncher.createUsingTestJDK("jhsdb");
+        launcher.addVMArgs(Utils.getTestJavaOpts());
         launcher.addToolArg("jstack");
         if (toolArgs != null) {
             for (String toolArg : toolArgs) {
@@ -77,10 +76,8 @@ public class DeadlockDetectionTest {
         }
 
         try {
-            String[] vmArgs = Utils.appendTestJavaOpts("-XX:+UsePerfData");
-
             theApp = new LingeredAppWithDeadlock();
-            LingeredApp.startApp(theApp, vmArgs);
+            LingeredApp.startApp(theApp, "-XX:+UsePerfData");
             OutputAnalyzer output = jstack("--pid", Long.toString(theApp.getPid()));
             System.out.println(output.getOutput());
 

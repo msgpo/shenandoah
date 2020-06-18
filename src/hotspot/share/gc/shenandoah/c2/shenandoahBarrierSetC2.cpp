@@ -27,11 +27,11 @@
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahForwarding.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
-#include "gc/shenandoah/shenandoahHeuristics.hpp"
 #include "gc/shenandoah/shenandoahRuntime.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 #include "gc/shenandoah/c2/shenandoahBarrierSetC2.hpp"
 #include "gc/shenandoah/c2/shenandoahSupport.hpp"
+#include "gc/shenandoah/heuristics/shenandoahHeuristics.hpp"
 #include "opto/arraycopynode.hpp"
 #include "opto/escape.hpp"
 #include "opto/graphKit.hpp"
@@ -375,7 +375,7 @@ void ShenandoahBarrierSetC2::insert_pre_barrier(GraphKit* kit, Node* base_oop, N
   // If offset is a constant, is it java_lang_ref_Reference::_reference_offset?
   const TypeX* otype = offset->find_intptr_t_type();
   if (otype != NULL && otype->is_con() &&
-      otype->get_con() != java_lang_ref_Reference::referent_offset) {
+      otype->get_con() != java_lang_ref_Reference::referent_offset()) {
     // Constant offset but not the reference_offset so just return
     return;
   }
@@ -415,7 +415,7 @@ void ShenandoahBarrierSetC2::insert_pre_barrier(GraphKit* kit, Node* base_oop, N
 
   IdealKit ideal(kit);
 
-  Node* referent_off = __ ConX(java_lang_ref_Reference::referent_offset);
+  Node* referent_off = __ ConX(java_lang_ref_Reference::referent_offset());
 
   __ if_then(offset, BoolTest::eq, referent_off, unlikely); {
       // Update graphKit memory and control from IdealKit.
@@ -483,14 +483,14 @@ const TypeFunc* ShenandoahBarrierSetC2::shenandoah_clone_barrier_Type() {
 
 const TypeFunc* ShenandoahBarrierSetC2::shenandoah_load_reference_barrier_Type() {
   const Type **fields = TypeTuple::fields(2);
-  fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // original field value
-  fields[TypeFunc::Parms+1] = TypeRawPtr::BOTTOM;   // original load address
+  fields[TypeFunc::Parms+0] = TypeOopPtr::BOTTOM; // original field value
+  fields[TypeFunc::Parms+1] = TypeRawPtr::BOTTOM; // original load address
 
   const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+2, fields);
 
   // create result type (range)
   fields = TypeTuple::fields(1);
-  fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL;
+  fields[TypeFunc::Parms+0] = TypeOopPtr::BOTTOM;
   const TypeTuple *range = TypeTuple::make(TypeFunc::Parms+1, fields);
 
   return TypeFunc::make(domain, range);
@@ -525,7 +525,6 @@ Node* ShenandoahBarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue&
     assert(((decorators & C2_TIGHTLY_COUPLED_ALLOC) != 0 || !ShenandoahSATBBarrier) && (decorators & C2_ARRAY_COPY) != 0, "unexpected caller of this code");
     C2OptAccess& opt_access = static_cast<C2OptAccess&>(access);
     PhaseGVN& gvn =  opt_access.gvn();
-    MergeMemNode* mm = opt_access.mem();
 
     if (ShenandoahStoreValEnqueueBarrier) {
       Node* enqueue = gvn.transform(new ShenandoahEnqueueBarrierNode(val.node()));
@@ -566,8 +565,7 @@ Node* ShenandoahBarrierSetC2::load_at_resolved(C2Access& access, const Type* val
 
     bool unknown = (decorators & ON_UNKNOWN_OOP_REF) != 0;
     bool on_weak_ref = (decorators & (ON_WEAK_OOP_REF | ON_PHANTOM_OOP_REF)) != 0;
-    bool is_traversal_mode = ShenandoahHeap::heap()->is_traversal_mode();
-    bool keep_alive = (decorators & AS_NO_KEEPALIVE) == 0 || is_traversal_mode;
+    bool keep_alive = (decorators & AS_NO_KEEPALIVE) == 0;
 
     // If we are reading the value of the referent field of a Reference
     // object (either by using Unsafe directly or through reflection)
@@ -775,7 +773,7 @@ bool ShenandoahBarrierSetC2::array_copy_requires_gc_barriers(bool tightly_couple
   if (!is_oop) {
     return false;
   }
-  if (tightly_coupled_alloc && ShenandoahSATBBarrier) {
+  if (ShenandoahSATBBarrier && tightly_coupled_alloc) {
     if (phase == Optimization) {
       return false;
     }

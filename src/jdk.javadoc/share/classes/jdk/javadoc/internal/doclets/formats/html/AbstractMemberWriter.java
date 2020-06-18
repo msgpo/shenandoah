@@ -51,6 +51,7 @@ import jdk.javadoc.internal.doclets.formats.html.markup.Table;
 import jdk.javadoc.internal.doclets.formats.html.markup.TableHeader;
 import jdk.javadoc.internal.doclets.toolkit.Content;
 import jdk.javadoc.internal.doclets.toolkit.MemberSummaryWriter;
+import jdk.javadoc.internal.doclets.toolkit.MemberWriter;
 import jdk.javadoc.internal.doclets.toolkit.Resources;
 import jdk.javadoc.internal.doclets.toolkit.taglets.DeprecatedTaglet;
 import jdk.javadoc.internal.doclets.toolkit.util.DocletConstants;
@@ -70,7 +71,7 @@ import static javax.lang.model.element.Modifier.SYNCHRONIZED;
  *  This code and its internal interfaces are subject to change or
  *  deletion without notice.</b>
  */
-public abstract class AbstractMemberWriter implements MemberSummaryWriter {
+public abstract class AbstractMemberWriter implements MemberSummaryWriter, MemberWriter {
 
     protected final HtmlConfiguration configuration;
     protected final HtmlOptions options;
@@ -327,7 +328,7 @@ public abstract class AbstractMemberWriter implements MemberSummaryWriter {
         List<? extends Element> members = mems;
         boolean printedUseTableHeader = false;
         if (members.size() > 0) {
-            Table useTable = new Table(HtmlStyle.useSummary)
+            Table useTable = new Table(HtmlStyle.useSummary, HtmlStyle.summaryTable)
                     .setCaption(heading)
                     .setRowScopeColumn(1)
                     .setColumnStyles(HtmlStyle.colFirst, HtmlStyle.colSecond, HtmlStyle.colLast);
@@ -465,6 +466,16 @@ public abstract class AbstractMemberWriter implements MemberSummaryWriter {
     @Override
     public Content getMemberTree(Content memberTree) {
         return writer.getMemberTree(memberTree);
+    }
+
+    @Override
+    public Content getMemberList() {
+        return writer.getMemberList();
+    }
+
+    @Override
+    public Content getMemberListItem(Content memberTree) {
+        return writer.getMemberListItem(memberTree);
     }
 
     /**
@@ -615,21 +626,16 @@ public abstract class AbstractMemberWriter implements MemberSummaryWriter {
             set.remove(STRICTFP);
 
             // According to JLS, we should not be showing public modifier for
-            // interface methods.
-            if ((utils.isField(element) || utils.isMethod(element))
-                    && ((writer instanceof ClassWriterImpl
-                    && utils.isInterface(((ClassWriterImpl) writer).getTypeElement())  ||
-                    writer instanceof AnnotationTypeWriterImpl) )) {
-                // Remove the implicit abstract and public modifiers
-                if (utils.isMethod(element) &&
-                        (utils.isInterface(element.getEnclosingElement()) ||
-                                utils.isAnnotationType(element.getEnclosingElement()))) {
-                    set.remove(ABSTRACT);
-                    set.remove(PUBLIC);
-                }
-                if (!utils.isMethod(element)) {
-                    set.remove(PUBLIC);
-                }
+            // interface methods and fields.
+            if ((utils.isField(element) || utils.isMethod(element))) {
+               Element te = element.getEnclosingElement();
+               if (utils.isInterface(te) || utils.isAnnotationType(te)) {
+                   // Remove the implicit abstract and public modifiers
+                   if (utils.isMethod(element)) {
+                       set.remove(ABSTRACT);
+                   }
+                   set.remove(PUBLIC);
+               }
             }
             if (!set.isEmpty()) {
                 String mods = set.stream().map(Modifier::toString).collect(Collectors.joining(" "));

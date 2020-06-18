@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,7 @@
 #include "compiler/oopMap.hpp"
 #include "gc/shared/barrierSet.hpp"
 #include "gc/shared/c2/barrierSetC2.hpp"
+#include "jfr/jfrEvents.hpp"
 #include "memory/resourceArea.hpp"
 #include "opto/addnode.hpp"
 #include "opto/block.hpp"
@@ -76,6 +77,7 @@
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
 #include "utilities/macros.hpp"
+#include "utilities/resourceHash.hpp"
 
 
 // -------------------- Compile::mach_constant_base_node -----------------------
@@ -527,9 +529,7 @@ Compile::Compile( ciEnv* ci_env, ciMethod* target, int osr_bci,
                   _log(ci_env->log()),
                   _failure_reason(NULL),
                   _congraph(NULL),
-#ifndef PRODUCT
-                  _printer(IdealGraphPrinter::printer()),
-#endif
+                  NOT_PRODUCT(_printer(NULL) COMMA)
                   _dead_node_list(comp_arena()),
                   _dead_node_count(0),
                   _node_arena(mtCompiler),
@@ -557,11 +557,6 @@ Compile::Compile( ciEnv* ci_env, ciMethod* target, int osr_bci,
 #endif
 {
   C = this;
-#ifndef PRODUCT
-  if (_printer != NULL) {
-    _printer->set_compile(this);
-  }
-#endif
   CompileWrapper cw(this);
 
   if (CITimeVerbose) {
@@ -723,7 +718,7 @@ Compile::Compile( ciEnv* ci_env, ciMethod* target, int osr_bci,
   // Drain the list.
   Finish_Warm();
 #ifndef PRODUCT
-  if (_printer && _printer->should_print(1)) {
+  if (should_print(1)) {
     _printer->print_inlining();
   }
 #endif
@@ -819,9 +814,7 @@ Compile::Compile( ciEnv* ci_env,
     _log(ci_env->log()),
     _failure_reason(NULL),
     _congraph(NULL),
-#ifndef PRODUCT
-    _printer(NULL),
-#endif
+    NOT_PRODUCT(_printer(NULL) COMMA)
     _dead_node_list(comp_arena()),
     _dead_node_count(0),
     _node_arena(mtCompiler),
@@ -1583,7 +1576,7 @@ Compile::AliasType* Compile::find_alias_type(const TypePtr* adr_type, bool no_cr
     if (flat == TypeInstPtr::KLASS)  alias_type(idx)->set_rewritable(false);
     if (flat == TypeAryPtr::RANGE)   alias_type(idx)->set_rewritable(false);
     if (flat->isa_instptr()) {
-      if (flat->offset() == java_lang_Class::klass_offset_in_bytes()
+      if (flat->offset() == java_lang_Class::klass_offset()
           && flat->is_instptr()->klass() == env()->Class_klass())
         alias_type(idx)->set_rewritable(false);
     }
@@ -2228,6 +2221,11 @@ void Compile::Optimize() {
     igvn.optimize();
   }
 
+  if (C->max_vector_size() > 0) {
+    C->optimize_logic_cones(igvn);
+    igvn.optimize();
+  }
+
   DEBUG_ONLY( _modified_nodes = NULL; )
  } // (End scope of igvn; run destructor if necessary for asserts.)
 
@@ -2244,6 +2242,320 @@ void Compile::Optimize() {
  print_method(PHASE_OPTIMIZE_FINISHED, 2);
 }
 
+//---------------------------- Bitwise operation packing optimization ---------------------------
+
+static bool is_vector_unary_bitwise_op(Node* n) {
+  return n->Opcode() == Op_XorV &&
+         VectorNode::is_vector_bitwise_not_pattern(n);
+}
+
+static bool is_vector_binary_bitwise_op(Node* n) {
+  switch (n->Opcode()) {
+    case Op_AndV:
+    case Op_OrV:
+      return true;
+
+    case Op_XorV:
+      return !is_vector_unary_bitwise_op(n);
+
+    default:
+      return false;
+  }
+}
+
+static bool is_vector_ternary_bitwise_op(Node* n) {
+  return n->Opcode() == Op_MacroLogicV;
+}
+
+static bool is_vector_bitwise_op(Node* n) {
+  return is_vector_unary_bitwise_op(n)  ||
+         is_vector_binary_bitwise_op(n) ||
+         is_vector_ternary_bitwise_op(n);
+}
+
+static bool is_vector_bitwise_cone_root(Node* n) {
+  if (!is_vector_bitwise_op(n)) {
+    return false;
+  }
+  for (DUIterator_Fast imax, i = n->fast_outs(imax); i < imax; i++) {
+    if (is_vector_bitwise_op(n->fast_out(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static uint collect_unique_inputs(Node* n, Unique_Node_List& partition, Unique_Node_List& inputs) {
+  uint cnt = 0;
+  if (is_vector_bitwise_op(n)) {
+    if (VectorNode::is_vector_bitwise_not_pattern(n)) {
+      for (uint i = 1; i < n->req(); i++) {
+        Node* in = n->in(i);
+        bool skip = VectorNode::is_all_ones_vector(in);
+        if (!skip && !inputs.member(in)) {
+          inputs.push(in);
+          cnt++;
+        }
+      }
+      assert(cnt <= 1, "not unary");
+    } else {
+      uint last_req = n->req();
+      if (is_vector_ternary_bitwise_op(n)) {
+        last_req = n->req() - 1; // skip last input
+      }
+      for (uint i = 1; i < last_req; i++) {
+        Node* def = n->in(i);
+        if (!inputs.member(def)) {
+          inputs.push(def);
+          cnt++;
+        }
+      }
+    }
+    partition.push(n);
+  } else { // not a bitwise operations
+    if (!inputs.member(n)) {
+      inputs.push(n);
+      cnt++;
+    }
+  }
+  return cnt;
+}
+
+void Compile::collect_logic_cone_roots(Unique_Node_List& list) {
+  Unique_Node_List useful_nodes;
+  C->identify_useful_nodes(useful_nodes);
+
+  for (uint i = 0; i < useful_nodes.size(); i++) {
+    Node* n = useful_nodes.at(i);
+    if (is_vector_bitwise_cone_root(n)) {
+      list.push(n);
+    }
+  }
+}
+
+Node* Compile::xform_to_MacroLogicV(PhaseIterGVN& igvn,
+                                    const TypeVect* vt,
+                                    Unique_Node_List& partition,
+                                    Unique_Node_List& inputs) {
+  assert(partition.size() == 2 || partition.size() == 3, "not supported");
+  assert(inputs.size()    == 2 || inputs.size()    == 3, "not supported");
+  assert(Matcher::match_rule_supported_vector(Op_MacroLogicV, vt->length(), vt->element_basic_type()), "not supported");
+
+  Node* in1 = inputs.at(0);
+  Node* in2 = inputs.at(1);
+  Node* in3 = (inputs.size() == 3 ? inputs.at(2) : in2);
+
+  uint func = compute_truth_table(partition, inputs);
+  return igvn.transform(MacroLogicVNode::make(igvn, in3, in2, in1, func, vt));
+}
+
+static uint extract_bit(uint func, uint pos) {
+  return (func & (1 << pos)) >> pos;
+}
+
+//
+//  A macro logic node represents a truth table. It has 4 inputs,
+//  First three inputs corresponds to 3 columns of a truth table
+//  and fourth input captures the logic function.
+//
+//  eg.  fn = (in1 AND in2) OR in3;
+//
+//      MacroNode(in1,in2,in3,fn)
+//
+//  -----------------
+//  in1 in2 in3  fn
+//  -----------------
+//  0    0   0    0
+//  0    0   1    1
+//  0    1   0    0
+//  0    1   1    1
+//  1    0   0    0
+//  1    0   1    1
+//  1    1   0    1
+//  1    1   1    1
+//
+
+uint Compile::eval_macro_logic_op(uint func, uint in1 , uint in2, uint in3) {
+  int res = 0;
+  for (int i = 0; i < 8; i++) {
+    int bit1 = extract_bit(in1, i);
+    int bit2 = extract_bit(in2, i);
+    int bit3 = extract_bit(in3, i);
+
+    int func_bit_pos = (bit1 << 2 | bit2 << 1 | bit3);
+    int func_bit = extract_bit(func, func_bit_pos);
+
+    res |= func_bit << i;
+  }
+  return res;
+}
+
+static uint eval_operand(Node* n, ResourceHashtable<Node*,uint>& eval_map) {
+  assert(n != NULL, "");
+  assert(eval_map.contains(n), "absent");
+  return *(eval_map.get(n));
+}
+
+static void eval_operands(Node* n,
+                          uint& func1, uint& func2, uint& func3,
+                          ResourceHashtable<Node*,uint>& eval_map) {
+  assert(is_vector_bitwise_op(n), "");
+  func1 = eval_operand(n->in(1), eval_map);
+
+  if (is_vector_binary_bitwise_op(n)) {
+    func2 = eval_operand(n->in(2), eval_map);
+  } else if (is_vector_ternary_bitwise_op(n)) {
+    func2 = eval_operand(n->in(2), eval_map);
+    func3 = eval_operand(n->in(3), eval_map);
+  } else {
+    assert(is_vector_unary_bitwise_op(n), "not unary");
+  }
+}
+
+uint Compile::compute_truth_table(Unique_Node_List& partition, Unique_Node_List& inputs) {
+  assert(inputs.size() <= 3, "sanity");
+  ResourceMark rm;
+  uint res = 0;
+  ResourceHashtable<Node*,uint> eval_map;
+
+  // Populate precomputed functions for inputs.
+  // Each input corresponds to one column of 3 input truth-table.
+  uint input_funcs[] = { 0xAA,   // (_, _, a) -> a
+                         0xCC,   // (_, b, _) -> b
+                         0xF0 }; // (c, _, _) -> c
+  for (uint i = 0; i < inputs.size(); i++) {
+    eval_map.put(inputs.at(i), input_funcs[i]);
+  }
+
+  for (uint i = 0; i < partition.size(); i++) {
+    Node* n = partition.at(i);
+
+    uint func1 = 0, func2 = 0, func3 = 0;
+    eval_operands(n, func1, func2, func3, eval_map);
+
+    switch (n->Opcode()) {
+      case Op_OrV:
+        assert(func3 == 0, "not binary");
+        res = func1 | func2;
+        break;
+      case Op_AndV:
+        assert(func3 == 0, "not binary");
+        res = func1 & func2;
+        break;
+      case Op_XorV:
+        if (VectorNode::is_vector_bitwise_not_pattern(n)) {
+          assert(func2 == 0 && func3 == 0, "not unary");
+          res = (~func1) & 0xFF;
+        } else {
+          assert(func3 == 0, "not binary");
+          res = func1 ^ func2;
+        }
+        break;
+      case Op_MacroLogicV:
+        // Ordering of inputs may change during evaluation of sub-tree
+        // containing MacroLogic node as a child node, thus a re-evaluation
+        // makes sure that function is evaluated in context of current
+        // inputs.
+        res = eval_macro_logic_op(n->in(4)->get_int(), func1, func2, func3);
+        break;
+
+      default: assert(false, "not supported: %s", n->Name());
+    }
+    assert(res <= 0xFF, "invalid");
+    eval_map.put(n, res);
+  }
+  return res;
+}
+
+bool Compile::compute_logic_cone(Node* n, Unique_Node_List& partition, Unique_Node_List& inputs) {
+  assert(partition.size() == 0, "not empty");
+  assert(inputs.size() == 0, "not empty");
+  if (is_vector_ternary_bitwise_op(n)) {
+    return false;
+  }
+
+  bool is_unary_op = is_vector_unary_bitwise_op(n);
+  if (is_unary_op) {
+    assert(collect_unique_inputs(n, partition, inputs) == 1, "not unary");
+    return false; // too few inputs
+  }
+
+  assert(is_vector_binary_bitwise_op(n), "not binary");
+  Node* in1 = n->in(1);
+  Node* in2 = n->in(2);
+
+  int in1_unique_inputs_cnt = collect_unique_inputs(in1, partition, inputs);
+  int in2_unique_inputs_cnt = collect_unique_inputs(in2, partition, inputs);
+  partition.push(n);
+
+  // Too many inputs?
+  if (inputs.size() > 3) {
+    partition.clear();
+    inputs.clear();
+    { // Recompute in2 inputs
+      Unique_Node_List not_used;
+      in2_unique_inputs_cnt = collect_unique_inputs(in2, not_used, not_used);
+    }
+    // Pick the node with minimum number of inputs.
+    if (in1_unique_inputs_cnt >= 3 && in2_unique_inputs_cnt >= 3) {
+      return false; // still too many inputs
+    }
+    // Recompute partition & inputs.
+    Node* child       = (in1_unique_inputs_cnt < in2_unique_inputs_cnt ? in1 : in2);
+    collect_unique_inputs(child, partition, inputs);
+
+    Node* other_input = (in1_unique_inputs_cnt < in2_unique_inputs_cnt ? in2 : in1);
+    inputs.push(other_input);
+
+    partition.push(n);
+  }
+
+  return (partition.size() == 2 || partition.size() == 3) &&
+         (inputs.size()    == 2 || inputs.size()    == 3);
+}
+
+
+void Compile::process_logic_cone_root(PhaseIterGVN &igvn, Node *n, VectorSet &visited) {
+  assert(is_vector_bitwise_op(n), "not a root");
+
+  visited.set(n->_idx);
+
+  // 1) Do a DFS walk over the logic cone.
+  for (uint i = 1; i < n->req(); i++) {
+    Node* in = n->in(i);
+    if (!visited.test(in->_idx) && is_vector_bitwise_op(in)) {
+      process_logic_cone_root(igvn, in, visited);
+    }
+  }
+
+  // 2) Bottom up traversal: Merge node[s] with
+  // the parent to form macro logic node.
+  Unique_Node_List partition;
+  Unique_Node_List inputs;
+  if (compute_logic_cone(n, partition, inputs)) {
+    const TypeVect* vt = n->bottom_type()->is_vect();
+    Node* macro_logic = xform_to_MacroLogicV(igvn, vt, partition, inputs);
+    igvn.replace_node(n, macro_logic);
+  }
+}
+
+void Compile::optimize_logic_cones(PhaseIterGVN &igvn) {
+  ResourceMark rm;
+  if (Matcher::match_rule_supported(Op_MacroLogicV)) {
+    Unique_Node_List list;
+    collect_logic_cone_roots(list);
+
+    while (list.size() > 0) {
+      Node* n = list.pop();
+      const TypeVect* vt = n->bottom_type()->is_vect();
+      bool supported = Matcher::match_rule_supported_vector(Op_MacroLogicV, vt->length(), vt->element_basic_type());
+      if (supported) {
+        VectorSet visited(comp_arena());
+        process_logic_cone_root(igvn, n, visited);
+      }
+    }
+  }
+}
 
 //------------------------------Code_Gen---------------------------------------
 // Given a graph, generate code for it
@@ -4224,3 +4536,129 @@ void CloneMap::dump(node_idx_t key) const {
     ni.dump();
   }
 }
+
+// Move Allocate nodes to the start of the list
+void Compile::sort_macro_nodes() {
+  int count = macro_count();
+  int allocates = 0;
+  for (int i = 0; i < count; i++) {
+    Node* n = macro_node(i);
+    if (n->is_Allocate()) {
+      if (i != allocates) {
+        Node* tmp = macro_node(allocates);
+        _macro_nodes->at_put(allocates, n);
+        _macro_nodes->at_put(i, tmp);
+      }
+      allocates++;
+    }
+  }
+}
+
+void Compile::print_method(CompilerPhaseType cpt, int level, int idx) {
+  EventCompilerPhase event;
+  if (event.should_commit()) {
+    CompilerEvent::PhaseEvent::post(event, C->_latest_stage_start_counter, cpt, C->_compile_id, level);
+  }
+
+#ifndef PRODUCT
+  if (should_print(level)) {
+    char output[1024];
+    if (idx != 0) {
+      jio_snprintf(output, sizeof(output), "%s:%d", CompilerPhaseTypeHelper::to_string(cpt), idx);
+    } else {
+      jio_snprintf(output, sizeof(output), "%s", CompilerPhaseTypeHelper::to_string(cpt));
+    }
+    _printer->print_method(output, level);
+  }
+#endif
+  C->_latest_stage_start_counter.stamp();
+}
+
+void Compile::end_method(int level) {
+  EventCompilerPhase event;
+  if (event.should_commit()) {
+    CompilerEvent::PhaseEvent::post(event, C->_latest_stage_start_counter, PHASE_END, C->_compile_id, level);
+  }
+
+#ifndef PRODUCT
+  if (_method != NULL && should_print(level)) {
+    _printer->end_method();
+  }
+#endif
+}
+
+
+#ifndef PRODUCT
+IdealGraphPrinter* Compile::_debug_file_printer = NULL;
+IdealGraphPrinter* Compile::_debug_network_printer = NULL;
+
+// Called from debugger. Prints method to the default file with the default phase name.
+// This works regardless of any Ideal Graph Visualizer flags set or not.
+void igv_print() {
+  Compile::current()->igv_print_method_to_file();
+}
+
+// Same as igv_print() above but with a specified phase name.
+void igv_print(const char* phase_name) {
+  Compile::current()->igv_print_method_to_file(phase_name);
+}
+
+// Called from debugger. Prints method with the default phase name to the default network or the one specified with
+// the network flags for the Ideal Graph Visualizer, or to the default file depending on the 'network' argument.
+// This works regardless of any Ideal Graph Visualizer flags set or not.
+void igv_print(bool network) {
+  if (network) {
+    Compile::current()->igv_print_method_to_network();
+  } else {
+    Compile::current()->igv_print_method_to_file();
+  }
+}
+
+// Same as igv_print(bool network) above but with a specified phase name.
+void igv_print(bool network, const char* phase_name) {
+  if (network) {
+    Compile::current()->igv_print_method_to_network(phase_name);
+  } else {
+    Compile::current()->igv_print_method_to_file(phase_name);
+  }
+}
+
+// Called from debugger. Normal write to the default _printer. Only works if Ideal Graph Visualizer printing flags are set.
+void igv_print_default() {
+  Compile::current()->print_method(PHASE_DEBUG, 0, 0);
+}
+
+// Called from debugger, especially when replaying a trace in which the program state cannot be altered like with rr replay.
+// A method is appended to an existing default file with the default phase name. This means that igv_append() must follow
+// an earlier igv_print(*) call which sets up the file. This works regardless of any Ideal Graph Visualizer flags set or not.
+void igv_append() {
+  Compile::current()->igv_print_method_to_file("Debug", true);
+}
+
+// Same as igv_append() above but with a specified phase name.
+void igv_append(const char* phase_name) {
+  Compile::current()->igv_print_method_to_file(phase_name, true);
+}
+
+void Compile::igv_print_method_to_file(const char* phase_name, bool append) {
+  const char* file_name = "custom_debug.xml";
+  if (_debug_file_printer == NULL) {
+    _debug_file_printer = new IdealGraphPrinter(C, file_name, append);
+  } else {
+    _debug_file_printer->update_compiled_method(C->method());
+  }
+  tty->print_cr("Method %s to %s", append ? "appended" : "printed", file_name);
+  _debug_file_printer->print_method(phase_name, 0);
+}
+
+void Compile::igv_print_method_to_network(const char* phase_name) {
+  if (_debug_network_printer == NULL) {
+    _debug_network_printer = new IdealGraphPrinter(C);
+  } else {
+    _debug_network_printer->update_compiled_method(C->method());
+  }
+  tty->print_cr("Method printed over network stream to IGV");
+  _debug_network_printer->print_method(phase_name, 0);
+}
+#endif
+

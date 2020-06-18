@@ -40,7 +40,7 @@
                             range,                                          \
                             constraint)                                     \
                                                                             \
-  experimental(size_t, ShenandoahHeapRegionSize, 0,                         \
+  experimental(size_t, ShenandoahRegionSize, 0,                             \
           "Static heap region size. Set zero to enable automatic sizing.")  \
                                                                             \
   experimental(size_t, ShenandoahTargetNumRegions, 2048,                    \
@@ -63,15 +63,14 @@
           "This also caps the maximum TLAB size.")                          \
           range(1, 100)                                                     \
                                                                             \
-  experimental(ccstr, ShenandoahGCMode, "iu",                               \
+  product(ccstr, ShenandoahGCMode, "satb",                                  \
           "GC mode to use.  Among other things, this defines which "        \
           "barriers are in in use. Possible values are:"                    \
-          " normal - default concurrent GC (three pass mark-evac-update);"  \
+          " satb - snapshot-at-the-beginning concurrent GC (three pass mark-evac-update);"  \
           " iu - incremental-update concurrent GC (three pass mark-evac-update);"  \
-          " traversal - traversal concurrent GC (single-pass); "            \
           " passive - stop the world GC only (either degenerated or full)") \
                                                                             \
-  experimental(ccstr, ShenandoahGCHeuristics, "adaptive",                   \
+  product(ccstr, ShenandoahGCHeuristics, "adaptive",                        \
           "GC heuristics to use. This fine-tunes the GC mode selected, "    \
           "by choosing when to start the GC, how much to process on each "  \
           "cycle, and what other features to automatically enable. "        \
@@ -95,11 +94,12 @@
           "GC cycles, as degenerated and full GCs would try to unload "     \
           "classes regardless. Set to zero to disable class unloading.")    \
                                                                             \
-  experimental(uintx, ShenandoahGarbageThreshold, 60,                       \
+  experimental(uintx, ShenandoahGarbageThreshold, 25,                       \
           "How much garbage a region has to contain before it would be "    \
-          "taken for collection. This a guideline only , as GC heuristics " \
+          "taken for collection. This a guideline only, as GC heuristics "  \
           "may select the region for collection even if it has little "     \
-          "garbage. In percents of heap region size.")                      \
+          "garbage. This also affects how much internal fragmentation the " \
+          "collector accepts. In percents of heap region size.")            \
           range(0,100)                                                      \
                                                                             \
   experimental(uintx, ShenandoahInitFreeThreshold, 70,                      \
@@ -211,10 +211,6 @@
   diagnostic(bool, ShenandoahElasticTLAB, true,                             \
           "Use Elastic TLABs with Shenandoah")                              \
                                                                             \
-  diagnostic(bool, ShenandoahAllowMixedAllocs, true,                        \
-          "Allow mixing mutator and collector allocations into a single "   \
-          "region. Some heuristics enable/disable it for their needs")      \
-                                                                            \
   experimental(uintx, ShenandoahEvacReserve, 5,                             \
           "How much of heap to reserve for evacuations. Larger values make "\
           "GC evacuate more live objects on every cycle, while leaving "    \
@@ -304,9 +300,6 @@
   diagnostic(bool, ShenandoahAllocFailureALot, false,                       \
           "Testing: make lots of artificial allocation failures.")          \
                                                                             \
-  diagnostic(bool, ShenandoahAlwaysPreTouch, false,                         \
-          "Pre-touch heap memory, overrides global AlwaysPreTouch.")        \
-                                                                            \
   experimental(intx, ShenandoahMarkScanPrefetch, 32,                        \
           "How many objects to prefetch ahead when traversing mark bitmaps."\
           "Set to 0 to disable prefetching.")                               \
@@ -352,19 +345,11 @@
   diagnostic(bool, ShenandoahLoadRefBarrier, true,                          \
           "Turn on/off load-reference barriers in Shenandoah")              \
                                                                             \
-  diagnostic(bool, ShenandoahConcurrentScanCodeRoots, true,                 \
-          "Scan code roots concurrently, instead of during a pause")        \
-                                                                            \
   diagnostic(uintx, ShenandoahCodeRootsStyle, 2,                            \
           "Use this style to scan the code cache roots:"                    \
           " 0 - sequential iterator;"                                       \
           " 1 - parallel iterator;"                                         \
           " 2 - parallel iterator with cset filters;")                      \
-                                                                            \
-  diagnostic(bool, ShenandoahOptimizeStaticFinals, true,                    \
-          "Optimize barriers on static final fields. "                      \
-          "Turn it off for maximum compatibility with reflection or JNI "   \
-          "code that manipulates final fields.")                            \
                                                                             \
   develop(bool, ShenandoahVerifyOptoBarriers, false,                        \
           "Verify no missing barriers in C2.")                              \

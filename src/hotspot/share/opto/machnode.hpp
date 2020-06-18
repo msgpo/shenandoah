@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -286,11 +286,12 @@ public:
 
   // Return the alignment required (in units of relocInfo::addr_unit())
   // for this instruction (must be a power of 2)
-  virtual int   alignment_required() const { return 1; }
+  int           pd_alignment_required() const;
+  virtual int   alignment_required() const { return pd_alignment_required(); }
 
   // Return the padding (in bytes) to be emitted before this
   // instruction to properly align it.
-  virtual int   compute_padding(int current_offset) const { return 0; }
+  virtual int   compute_padding(int current_offset) const;
 
   // Return number of relocatable values contained in this instruction
   virtual int   reloc() const { return 0; }
@@ -522,9 +523,6 @@ private:
 
 public:
   bool do_polling() const { return _do_polling; }
-
-  // Offset of safepoint from the beginning of the node
-  int safepoint_offset() const;
 
 #ifndef PRODUCT
   virtual const char *Name() const { return "Epilog"; }
@@ -1012,8 +1010,12 @@ public:
 // Machine-specific versions of halt nodes
 class MachHaltNode : public MachReturnNode {
 public:
+  bool _reachable;
   const char* _halt_reason;
   virtual JVMState* jvms() const;
+  bool is_reachable() const {
+    return _reachable;
+  }
 };
 
 class MachMemBarNode : public MachNode {

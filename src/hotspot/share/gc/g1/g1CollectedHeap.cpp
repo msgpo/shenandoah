@@ -41,11 +41,13 @@
 #include "gc/g1/g1DirtyCardQueue.hpp"
 #include "gc/g1/g1EvacStats.inline.hpp"
 #include "gc/g1/g1FullCollector.hpp"
+#include "gc/g1/g1GCParPhaseTimesTracker.hpp"
 #include "gc/g1/g1GCPhaseTimes.hpp"
 #include "gc/g1/g1HeapSizingPolicy.hpp"
 #include "gc/g1/g1HeapTransition.hpp"
 #include "gc/g1/g1HeapVerifier.hpp"
 #include "gc/g1/g1HotCardCache.hpp"
+#include "gc/g1/g1InitLogger.hpp"
 #include "gc/g1/g1MemoryPool.hpp"
 #include "gc/g1/g1OopClosures.inline.hpp"
 #include "gc/g1/g1ParallelCleaning.hpp"
@@ -209,14 +211,15 @@ HeapRegion* G1CollectedHeap::new_region(size_t word_size,
 }
 
 HeapWord*
-G1CollectedHeap::humongous_obj_allocate_initialize_regions(uint first,
+G1CollectedHeap::humongous_obj_allocate_initialize_regions(HeapRegion* first_hr,
                                                            uint num_regions,
                                                            size_t word_size) {
-  assert(first != G1_NO_HRM_INDEX, "pre-condition");
+  assert(first_hr != NULL, "pre-condition");
   assert(is_humongous(word_size), "word_size should be humongous");
   assert(num_regions * HeapRegion::GrainWords >= word_size, "pre-condition");
 
   // Index of last region in the series.
+  uint first = first_hr->hrm_index();
   uint last = first + num_regions - 1;
 
   // We need to initialize the region(s) we just discovered. This is
@@ -231,10 +234,8 @@ G1CollectedHeap::humongous_obj_allocate_initialize_regions(uint first,
   size_t word_size_sum = (size_t) num_regions * HeapRegion::GrainWords;
   assert(word_size <= word_size_sum, "sanity");
 
-  // This will be the "starts humongous" region.
-  HeapRegion* first_hr = region_at(first);
-  // The header of the new object will be placed at the bottom of
-  // the first region.
+  // The passed in hr will be the "starts humongous" region. The header
+  // of the new object will be placed at the bottom of this region.
   HeapWord* new_obj = first_hr->bottom();
   // This will be the new top of the new object.
   HeapWord* obj_top = new_obj + word_size;
@@ -340,57 +341,28 @@ HeapWord* G1CollectedHeap::humongous_obj_allocate(size_t word_size) {
 
   _verifier->verify_region_sets_optional();
 
-  uint first = G1_NO_HRM_INDEX;
   uint obj_regions = (uint) humongous_obj_size_in_regions(word_size);
 
-  if (obj_regions == 1) {
-    // Only one region to allocate, try to use a fast path by directly allocating
-    // from the free lists. Do not try to expand here, we will potentially do that
-    // later.
-    HeapRegion* hr = new_region(word_size, HeapRegionType::Humongous, false /* do_expand */);
-    if (hr != NULL) {
-      first = hr->hrm_index();
-    }
-  } else {
-    // Policy: Try only empty regions (i.e. already committed first). Maybe we
-    // are lucky enough to find some.
-    first = _hrm->find_contiguous_only_empty(obj_regions);
-    if (first != G1_NO_HRM_INDEX) {
-      _hrm->allocate_free_regions_starting_at(first, obj_regions);
-    }
-  }
-
-  if (first == G1_NO_HRM_INDEX) {
+  // Policy: First try to allocate a humongous object in the free list.
+  HeapRegion* humongous_start = _hrm->allocate_humongous(obj_regions);
+  if (humongous_start == NULL) {
     // Policy: We could not find enough regions for the humongous object in the
     // free list. Look through the heap to find a mix of free and uncommitted regions.
-    // If so, try expansion.
-    first = _hrm->find_contiguous_empty_or_unavailable(obj_regions);
-    if (first != G1_NO_HRM_INDEX) {
-      // We found something. Make sure these regions are committed, i.e. expand
-      // the heap. Alternatively we could do a defragmentation GC.
-      log_debug(gc, ergo, heap)("Attempt heap expansion (humongous allocation request failed). Allocation request: " SIZE_FORMAT "B",
-                                    word_size * HeapWordSize);
-
-      _hrm->expand_at(first, obj_regions, workers());
+    // If so, expand the heap and allocate the humongous object.
+    humongous_start = _hrm->expand_and_allocate_humongous(obj_regions);
+    if (humongous_start != NULL) {
+      // We managed to find a region by expanding the heap.
+      log_debug(gc, ergo, heap)("Heap expansion (humongous allocation request). Allocation request: " SIZE_FORMAT "B",
+                                word_size * HeapWordSize);
       policy()->record_new_heap_size(num_regions());
-
-#ifdef ASSERT
-      for (uint i = first; i < first + obj_regions; ++i) {
-        HeapRegion* hr = region_at(i);
-        assert(hr->is_free(), "sanity");
-        assert(hr->is_empty(), "sanity");
-        assert(is_on_master_free_list(hr), "sanity");
-      }
-#endif
-      _hrm->allocate_free_regions_starting_at(first, obj_regions);
     } else {
       // Policy: Potentially trigger a defragmentation GC.
     }
   }
 
   HeapWord* result = NULL;
-  if (first != G1_NO_HRM_INDEX) {
-    result = humongous_obj_allocate_initialize_regions(first, obj_regions, word_size);
+  if (humongous_start != NULL) {
+    result = humongous_obj_allocate_initialize_regions(humongous_start, obj_regions, word_size);
     assert(result != NULL, "it should always return a valid result");
 
     // A successful humongous object allocation changes the used space
@@ -899,7 +871,8 @@ HeapWord* G1CollectedHeap::attempt_allocation_humongous(size_t word_size) {
       result = humongous_obj_allocate(word_size);
       if (result != NULL) {
         size_t size_in_regions = humongous_obj_size_in_regions(word_size);
-        policy()->add_bytes_allocated_in_old_since_last_gc(size_in_regions * HeapRegion::GrainBytes);
+        policy()->old_gen_alloc_tracker()->
+          add_allocated_bytes_since_last_gc(size_in_regions * HeapRegion::GrainBytes);
         return result;
       }
 
@@ -1084,10 +1057,11 @@ void G1CollectedHeap::abort_refinement() {
     _hot_card_cache->reset_hot_cache();
   }
 
-  // Discard all remembered set updates.
+  // Discard all remembered set updates and reset refinement statistics.
   G1BarrierSet::dirty_card_queue_set().abandon_logs();
   assert(G1BarrierSet::dirty_card_queue_set().num_cards() == 0,
          "DCQS should be empty");
+  concurrent_refine()->get_and_reset_refinement_stats();
 }
 
 void G1CollectedHeap::verify_after_full_collection() {
@@ -1570,12 +1544,12 @@ G1CollectedHeap::G1CollectedHeap() :
   _filler_array_max_size = _humongous_object_threshold_in_words;
 
   uint n_queues = ParallelGCThreads;
-  _task_queues = new RefToScanQueueSet(n_queues);
+  _task_queues = new G1ScannerTasksQueueSet(n_queues);
 
   _evacuation_failed_info_array = NEW_C_HEAP_ARRAY(EvacuationFailedInfo, n_queues, mtGC);
 
   for (uint i = 0; i < n_queues; i++) {
-    RefToScanQueue* q = new RefToScanQueue();
+    G1ScannerTasksQueue* q = new G1ScannerTasksQueue();
     q->initialize();
     _task_queues->register_queue(i, q);
     ::new (&_evacuation_failed_info_array[i]) EvacuationFailedInfo();
@@ -1851,6 +1825,8 @@ jint G1CollectedHeap::initialize() {
   _preserved_marks_set.init(ParallelGCThreads);
 
   _collection_set.initialize(max_regions());
+
+  G1InitLogger::print();
 
   return JNI_OK;
 }
@@ -2532,11 +2508,13 @@ void G1CollectedHeap::print_heap_regions() const {
 
 void G1CollectedHeap::print_on(outputStream* st) const {
   st->print(" %-20s", "garbage-first heap");
-  st->print(" total " SIZE_FORMAT "K, used " SIZE_FORMAT "K",
-            capacity()/K, used_unlocked()/K);
-  st->print(" [" PTR_FORMAT ", " PTR_FORMAT ")",
-            p2i(_hrm->reserved().start()),
-            p2i(_hrm->reserved().end()));
+  if (_hrm != NULL) {
+    st->print(" total " SIZE_FORMAT "K, used " SIZE_FORMAT "K",
+              capacity()/K, used_unlocked()/K);
+    st->print(" [" PTR_FORMAT ", " PTR_FORMAT ")",
+              p2i(_hrm->reserved().start()),
+              p2i(_hrm->reserved().end()));
+  }
   st->cr();
   st->print("  region size " SIZE_FORMAT "K, ", HeapRegion::GrainBytes / K);
   uint young_regions = young_regions_count();
@@ -2551,7 +2529,8 @@ void G1CollectedHeap::print_on(outputStream* st) const {
     st->print("  remaining free region(s) on each NUMA node: ");
     const int* node_ids = _numa->node_ids();
     for (uint node_index = 0; node_index < num_nodes; node_index++) {
-      st->print("%d=%u ", node_ids[node_index], _hrm->num_free_regions(node_index));
+      uint num_free_regions = (_hrm != NULL ? _hrm->num_free_regions(node_index) : 0);
+      st->print("%d=%u ", node_ids[node_index], num_free_regions);
     }
     st->cr();
   }
@@ -2559,6 +2538,10 @@ void G1CollectedHeap::print_on(outputStream* st) const {
 }
 
 void G1CollectedHeap::print_regions_on(outputStream* st) const {
+  if (_hrm == NULL) {
+    return;
+  }
+
   st->print_cr("Heap Regions: E=young(eden), S=young(survivor), O=old, "
                "HS=humongous(starts), HC=humongous(continues), "
                "CS=collection set, F=free, "
@@ -2572,7 +2555,10 @@ void G1CollectedHeap::print_extended_on(outputStream* st) const {
   print_on(st);
 
   // Print the per-region information.
-  print_regions_on(st);
+  if (_hrm != NULL) {
+    st->cr();
+    print_regions_on(st);
+  }
 }
 
 void G1CollectedHeap::print_on_error(outputStream* st) const {
@@ -2581,18 +2567,6 @@ void G1CollectedHeap::print_on_error(outputStream* st) const {
   if (_cm != NULL) {
     st->cr();
     _cm->print_on_error(st);
-  }
-}
-
-void G1CollectedHeap::print_gc_threads_on(outputStream* st) const {
-  workers()->print_worker_threads_on(st);
-  _cm_thread->print_on(st);
-  st->cr();
-  _cm->print_worker_threads_on(st);
-  _cr->print_threads_on(st);
-  _young_gen_sampling_thread->print_on(st);
-  if (G1StringDedup::is_enabled()) {
-    G1StringDedup::print_worker_threads_on(st);
   }
 }
 
@@ -2714,9 +2688,22 @@ void G1CollectedHeap::gc_prologue(bool full) {
   }
 
   // Fill TLAB's and such
-  double start = os::elapsedTime();
-  ensure_parsability(true);
-  phase_times()->record_prepare_tlab_time_ms((os::elapsedTime() - start) * 1000.0);
+  {
+    Ticks start = Ticks::now();
+    ensure_parsability(true);
+    Tickspan dt = Ticks::now() - start;
+    phase_times()->record_prepare_tlab_time_ms(dt.seconds() * MILLIUNITS);
+  }
+
+  if (!full) {
+    // Flush dirty card queues to qset, so later phases don't need to account
+    // for partially filled per-thread queues and such.  Not needed for full
+    // collections, which ignore those logs.
+    Ticks start = Ticks::now();
+    G1BarrierSet::dirty_card_queue_set().concatenate_logs();
+    Tickspan dt = Ticks::now() - start;
+    phase_times()->record_concatenate_dirty_card_logs_time_ms(dt.seconds() * MILLIUNITS);
+  }
 }
 
 void G1CollectedHeap::gc_epilogue(bool full) {
@@ -2787,20 +2774,6 @@ void G1CollectedHeap::do_concurrent_mark() {
     _cm_thread->set_started();
     CGC_lock->notify();
   }
-}
-
-size_t G1CollectedHeap::pending_card_num() {
-  struct CountCardsClosure : public ThreadClosure {
-    size_t _cards;
-    CountCardsClosure() : _cards(0) {}
-    virtual void do_thread(Thread* t) {
-      _cards += G1ThreadLocalData::dirty_card_queue(t).size();
-    }
-  } count_from_threads;
-  Threads::threads_do(&count_from_threads);
-
-  G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
-  return dcqs.num_cards() + count_from_threads._cards;
 }
 
 bool G1CollectedHeap::is_potential_eager_reclaim_candidate(HeapRegion* r) const {
@@ -3428,7 +3401,7 @@ public:
       // When the queue is drained (after each phase of reference processing)
       // the object and it's followers will be copied, the reference field set
       // to point to the new location, and the RSet updated.
-      _par_scan_state->push_on_queue(p);
+      _par_scan_state->push_on_queue(ScannerTask(p));
     }
   }
 };
@@ -3465,14 +3438,14 @@ class G1STWRefProcTaskExecutor: public AbstractRefProcTaskExecutor {
 private:
   G1CollectedHeap*          _g1h;
   G1ParScanThreadStateSet*  _pss;
-  RefToScanQueueSet*        _queues;
+  G1ScannerTasksQueueSet*   _queues;
   WorkGang*                 _workers;
 
 public:
   G1STWRefProcTaskExecutor(G1CollectedHeap* g1h,
                            G1ParScanThreadStateSet* per_thread_states,
                            WorkGang* workers,
-                           RefToScanQueueSet *task_queues) :
+                           G1ScannerTasksQueueSet *task_queues) :
     _g1h(g1h),
     _pss(per_thread_states),
     _queues(task_queues),
@@ -3492,14 +3465,14 @@ class G1STWRefProcTaskProxy: public AbstractGangTask {
   ProcessTask&     _proc_task;
   G1CollectedHeap* _g1h;
   G1ParScanThreadStateSet* _pss;
-  RefToScanQueueSet* _task_queues;
+  G1ScannerTasksQueueSet* _task_queues;
   TaskTerminator* _terminator;
 
 public:
   G1STWRefProcTaskProxy(ProcessTask& proc_task,
                         G1CollectedHeap* g1h,
                         G1ParScanThreadStateSet* per_thread_states,
-                        RefToScanQueueSet *task_queues,
+                        G1ScannerTasksQueueSet *task_queues,
                         TaskTerminator* terminator) :
     AbstractGangTask("Process reference objects in parallel"),
     _proc_task(proc_task),
@@ -3830,7 +3803,7 @@ class G1EvacuateRegionsBaseTask : public AbstractGangTask {
 protected:
   G1CollectedHeap* _g1h;
   G1ParScanThreadStateSet* _per_thread_states;
-  RefToScanQueueSet* _task_queues;
+  G1ScannerTasksQueueSet* _task_queues;
   TaskTerminator _terminator;
   uint _num_workers;
 
@@ -3868,7 +3841,10 @@ protected:
   virtual void evacuate_live_objects(G1ParScanThreadState* pss, uint worker_id) = 0;
 
 public:
-  G1EvacuateRegionsBaseTask(const char* name, G1ParScanThreadStateSet* per_thread_states, RefToScanQueueSet* task_queues, uint num_workers) :
+  G1EvacuateRegionsBaseTask(const char* name,
+                            G1ParScanThreadStateSet* per_thread_states,
+                            G1ScannerTasksQueueSet* task_queues,
+                            uint num_workers) :
     AbstractGangTask(name),
     _g1h(G1CollectedHeap::heap()),
     _per_thread_states(per_thread_states),
@@ -3919,7 +3895,7 @@ class G1EvacuateRegionsTask : public G1EvacuateRegionsBaseTask {
 public:
   G1EvacuateRegionsTask(G1CollectedHeap* g1h,
                         G1ParScanThreadStateSet* per_thread_states,
-                        RefToScanQueueSet* task_queues,
+                        G1ScannerTasksQueueSet* task_queues,
                         G1RootProcessor* root_processor,
                         uint num_workers) :
     G1EvacuateRegionsBaseTask("G1 Evacuate Regions", per_thread_states, task_queues, num_workers),
@@ -3967,7 +3943,7 @@ class G1EvacuateOptionalRegionsTask : public G1EvacuateRegionsBaseTask {
 
 public:
   G1EvacuateOptionalRegionsTask(G1ParScanThreadStateSet* per_thread_states,
-                                RefToScanQueueSet* queues,
+                                G1ScannerTasksQueueSet* queues,
                                 uint num_workers) :
     G1EvacuateRegionsBaseTask("G1 Evacuate Optional Regions", per_thread_states, queues, num_workers) {
   }
@@ -4108,7 +4084,8 @@ void G1CollectedHeap::post_evacuate_collection_set(G1EvacuationInfo& evacuation_
 }
 
 void G1CollectedHeap::record_obj_copy_mem_stats() {
-  policy()->add_bytes_allocated_in_old_since_last_gc(_old_evac_stats.allocated() * HeapWordSize);
+  policy()->old_gen_alloc_tracker()->
+    add_allocated_bytes_since_last_gc(_old_evac_stats.allocated() * HeapWordSize);
 
   _gc_tracer_stw->report_evacuation_statistics(create_g1_evac_summary(&_survivor_evac_stats),
                                                create_g1_evac_summary(&_old_evac_stats));
@@ -4209,7 +4186,7 @@ class G1FreeCollectionSetTask : public AbstractGangTask {
       g1h->alloc_buffer_stats(G1HeapRegionAttr::Old)->add_failure_used_and_waste(_failure_used_words, _failure_waste_words);
 
       G1Policy *policy = g1h->policy();
-      policy->add_bytes_allocated_in_old_since_last_gc(_bytes_allocated_in_old_since_last_gc);
+      policy->old_gen_alloc_tracker()->add_allocated_bytes_since_last_gc(_bytes_allocated_in_old_since_last_gc);
       policy->record_rs_length(_rs_length);
       policy->cset_regions_freed();
     }
@@ -4892,8 +4869,7 @@ HeapRegion* G1CollectedHeap::alloc_highest_free_region() {
       log_debug(gc, ergo, heap)("Attempt heap expansion (requested address range outside heap bounds). region size: " SIZE_FORMAT "B",
                                 HeapRegion::GrainWords * HeapWordSize);
     }
-    _hrm->allocate_free_regions_starting_at(index, 1);
-    return region_at(index);
+    return _hrm->allocate_free_regions_starting_at(index, 1);
   }
   return NULL;
 }

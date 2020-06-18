@@ -711,8 +711,16 @@ class Thread: public ThreadShadow {
 
   // Check if address is in the stack mapped to this thread. Used mainly in
   // error reporting (so has to include guard zone) and frame printing.
-  bool is_in_full_stack(address adr) const {
+  // Expects _stack_base to be initialized - checked with assert.
+  bool is_in_full_stack_checked(address adr) const {
     return is_in_stack_range_incl(adr, stack_end());
+  }
+
+  // Like is_in_full_stack_checked but without the assertions as this
+  // may be called in a thread before _stack_base is initialized.
+  bool is_in_full_stack(address adr) const {
+    address stack_end = _stack_base - _stack_size;
+    return _stack_base > adr && adr >= stack_end;
   }
 
   // Check if address is in the live stack of this thread (not just for locks).
@@ -748,7 +756,7 @@ protected:
 
  public:
   // Stack overflow support
-  address stack_base() const           { assert(_stack_base != NULL,"Sanity check failed for %s", name()); return _stack_base; }
+  address stack_base() const           { assert(_stack_base != NULL,"Sanity check"); return _stack_base; }
   void    set_stack_base(address base) { _stack_base = base; }
   size_t  stack_size() const           { return _stack_size; }
   void    set_stack_size(size_t size)  { _stack_size = size; }
@@ -1009,6 +1017,7 @@ class JavaThread: public Thread {
   friend class VMStructs;
   friend class JVMCIVMStructs;
   friend class WhiteBox;
+  friend class ThreadsSMRSupport; // to access _threadObj for exiting_threads_oops_do
  private:
   bool           _on_thread_list;                // Is set when this JavaThread is added to the Threads list
   oop            _threadObj;                     // The Java level thread object
@@ -1340,7 +1349,7 @@ class JavaThread: public Thread {
   HandshakeState _handshake;
  public:
   void set_handshake_operation(HandshakeOperation* op) {
-    _handshake.set_operation(this, op);
+    _handshake.set_operation(op);
   }
 
   bool has_handshake() const {
@@ -1348,16 +1357,16 @@ class JavaThread: public Thread {
   }
 
   void handshake_process_by_self() {
-    _handshake.process_by_self(this);
+    _handshake.process_by_self();
   }
 
-  bool handshake_try_process_by_vmThread() {
-    return _handshake.try_process_by_vmThread(this);
+  HandshakeState::ProcessResult handshake_try_process(HandshakeOperation* op) {
+    return _handshake.try_process(op);
   }
 
 #ifdef ASSERT
-  bool is_vmthread_processing_handshake() const {
-    return _handshake.is_vmthread_processing_handshake();
+  Thread* active_handshaker() const {
+    return _handshake.active_handshaker();
   }
 #endif
 
@@ -1565,12 +1574,12 @@ class JavaThread: public Thread {
 #endif // INCLUDE_JVMCI
 
   // Exception handling for compiled methods
-  oop      exception_oop() const                 { return _exception_oop; }
+  oop      exception_oop() const;
   address  exception_pc() const                  { return _exception_pc; }
   address  exception_handler_pc() const          { return _exception_handler_pc; }
   bool     is_method_handle_return() const       { return _is_method_handle_return == 1; }
 
-  void set_exception_oop(oop o)                  { (void)const_cast<oop&>(_exception_oop = o); }
+  void set_exception_oop(oop o);
   void set_exception_pc(address a)               { _exception_pc = a; }
   void set_exception_handler_pc(address a)       { _exception_handler_pc = a; }
   void set_is_method_handle_return(bool value)   { _is_method_handle_return = value ? 1 : 0; }
@@ -2023,9 +2032,11 @@ class JavaThread: public Thread {
 
   // Used by the interpreter in fullspeed mode for frame pop, method
   // entry, method exit and single stepping support. This field is
-  // only set to non-zero by the VM_EnterInterpOnlyMode VM operation.
-  // It can be set to zero asynchronously (i.e., without a VM operation
-  // or a lock) so we have to be very careful.
+  // only set to non-zero at a safepoint or using a direct handshake
+  // (see EnterInterpOnlyModeClosure).
+  // It can be set to zero asynchronously to this threads execution (i.e., without
+  // safepoint/handshake or a lock) so we have to be very careful.
+  // Accesses by other threads are synchronized using JvmtiThreadState_lock though.
   int               _interp_only_mode;
 
  public:

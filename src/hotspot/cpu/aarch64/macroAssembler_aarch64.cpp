@@ -60,12 +60,10 @@
 
 #ifdef PRODUCT
 #define BLOCK_COMMENT(str) /* nothing */
-#define STOP(error) stop(error)
 #else
 #define BLOCK_COMMENT(str) block_comment(str)
-#define STOP(error) block_comment(error); stop(error)
 #endif
-
+#define STOP(str) stop(str);
 #define BIND(label) bind(label); BLOCK_COMMENT(#label ":")
 
 // Patch any kind of instruction; there may be several instructions.
@@ -291,16 +289,8 @@ address MacroAssembler::target_addr_for_insn(address insn_addr, unsigned insn) {
 }
 
 void MacroAssembler::safepoint_poll(Label& slow_path) {
-  if (SafepointMechanism::uses_thread_local_poll()) {
-    ldr(rscratch1, Address(rthread, Thread::polling_page_offset()));
-    tbnz(rscratch1, exact_log2(SafepointMechanism::poll_bit()), slow_path);
-  } else {
-    unsigned long offset;
-    adrp(rscratch1, ExternalAddress(SafepointSynchronize::address_of_state()), offset);
-    ldrw(rscratch1, Address(rscratch1, offset));
-    assert(SafepointSynchronize::_not_synchronized == 0, "rewrite this code");
-    cbnz(rscratch1, slow_path);
-  }
+  ldr(rscratch1, Address(rthread, Thread::polling_page_offset()));
+  tbnz(rscratch1, exact_log2(SafepointMechanism::poll_bit()), slow_path);
 }
 
 // Just like safepoint_poll, but use an acquiring load for thread-
@@ -316,13 +306,9 @@ void MacroAssembler::safepoint_poll(Label& slow_path) {
 // racing the code which wakes up from a safepoint.
 //
 void MacroAssembler::safepoint_poll_acquire(Label& slow_path) {
-  if (SafepointMechanism::uses_thread_local_poll()) {
-    lea(rscratch1, Address(rthread, Thread::polling_page_offset()));
-    ldar(rscratch1, rscratch1);
-    tbnz(rscratch1, exact_log2(SafepointMechanism::poll_bit()), slow_path);
-  } else {
-    safepoint_poll(slow_path);
-  }
+  lea(rscratch1, Address(rthread, Thread::polling_page_offset()));
+  ldar(rscratch1, rscratch1);
+  tbnz(rscratch1, exact_log2(SafepointMechanism::poll_bit()), slow_path);
 }
 
 void MacroAssembler::reset_last_Java_frame(bool clear_fp) {
@@ -1344,7 +1330,7 @@ void MacroAssembler::verify_oop(Register reg, const char* s) {
   stp(rscratch2, lr, Address(pre(sp, -2 * wordSize)));
 
   mov(r0, reg);
-  mov(rscratch1, (address)b);
+  movptr(rscratch1, (uintptr_t)(address)b);
 
   // call indirectly to solve generation ordering problem
   lea(rscratch2, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
@@ -1380,7 +1366,7 @@ void MacroAssembler::verify_oop_addr(Address addr, const char* s) {
   } else {
     ldr(r0, addr);
   }
-  mov(rscratch1, (address)b);
+  movptr(rscratch1, (uintptr_t)(address)b);
 
   // call indirectly to solve generation ordering problem
   lea(rscratch2, ExternalAddress(StubRoutines::verify_oop_subroutine_entry_address()));
@@ -2197,6 +2183,10 @@ void MacroAssembler::verify_heapbase(const char* msg) {
 #if 0
   assert (UseCompressedOops || UseCompressedClassPointers, "should be compressed");
   assert (Universe::heap() != NULL, "java heap should be initialized");
+  if (!UseCompressedOops || Universe::ptr_base() == NULL) {
+    // rheapbase is allocated as general register
+    return;
+  }
   if (CheckCompressedOops) {
     Label ok;
     push(1 << rscratch1->encoding(), sp); // cmpptr trashes rscratch1
@@ -2231,22 +2221,9 @@ void MacroAssembler::resolve_jobject(Register value, Register thread, Register t
 }
 
 void MacroAssembler::stop(const char* msg) {
-  address ip = pc();
-  pusha();
-  mov(c_rarg0, (address)msg);
-  mov(c_rarg1, (address)ip);
-  mov(c_rarg2, sp);
-  mov(c_rarg3, CAST_FROM_FN_PTR(address, MacroAssembler::debug64));
-  blr(c_rarg3);
-  hlt(0);
-}
-
-void MacroAssembler::warn(const char* msg) {
-  pusha();
-  mov(c_rarg0, (address)msg);
-  mov(lr, CAST_FROM_FN_PTR(address, warning));
-  blr(lr);
-  popa();
+  BLOCK_COMMENT(msg);
+  dcps1(0xdeae);
+  emit_int64((uintptr_t)msg);
 }
 
 void MacroAssembler::unimplemented(const char* what) {
@@ -3701,6 +3678,11 @@ void MacroAssembler::cmpoop(Register obj1, Register obj2) {
   bs->obj_equals(this, obj1, obj2);
 }
 
+void MacroAssembler::load_method_holder_cld(Register rresult, Register rmethod) {
+  load_method_holder(rresult, rmethod);
+  ldr(rresult, Address(rresult, InstanceKlass::class_loader_data_offset()));
+}
+
 void MacroAssembler::load_method_holder(Register holder, Register method) {
   ldr(holder, Address(method, Method::const_offset()));                      // ConstMethod*
   ldr(holder, Address(holder, ConstMethod::constants_offset()));             // ConstantPool*
@@ -3720,6 +3702,22 @@ void MacroAssembler::load_klass(Register dst, Register src) {
 void MacroAssembler::resolve_oop_handle(Register result, Register tmp) {
   // OopHandle::resolve is an indirection.
   access_load_at(T_OBJECT, IN_NATIVE, result, Address(result, 0), tmp, noreg);
+}
+
+// ((WeakHandle)result).resolve();
+void MacroAssembler::resolve_weak_handle(Register rresult, Register rtmp) {
+  assert_different_registers(rresult, rtmp);
+  Label resolved;
+
+  // A null weak handle resolves to null.
+  cbz(rresult, resolved);
+
+  // Only 64 bit platforms support GCs that require a tmp register
+  // Only IN_HEAP loads require a thread_tmp register
+  // WeakHandle::resolve is an indirection like jweak.
+  access_load_at(T_OBJECT, IN_NATIVE | ON_PHANTOM_OOP_REF,
+                 rresult, Address(rresult), rtmp, /*tmp_thread*/noreg);
+  bind(resolved);
 }
 
 void MacroAssembler::load_mirror(Register dst, Register method, Register tmp) {
@@ -4116,9 +4114,9 @@ Address MacroAssembler::allocate_metadata_address(Metadata* obj) {
 }
 
 // Move an oop into a register.  immediate is true if we want
-// immediate instrcutions, i.e. we are not going to patch this
-// instruction while the code is being executed by another thread.  In
-// that case we can use move immediates rather than the constant pool.
+// immediate instructions and nmethod entry barriers are not enabled.
+// i.e. we are not going to patch this instruction while the code is being
+// executed by another thread.
 void MacroAssembler::movoop(Register dst, jobject obj, bool immediate) {
   int oop_index;
   if (obj == NULL) {
@@ -4133,11 +4131,16 @@ void MacroAssembler::movoop(Register dst, jobject obj, bool immediate) {
     oop_index = oop_recorder()->find_index(obj);
   }
   RelocationHolder rspec = oop_Relocation::spec(oop_index);
-  if (! immediate) {
+
+  // nmethod entry barrier necessitate using the constant pool. They have to be
+  // ordered with respected to oop accesses.
+  // Using immediate literals would necessitate ISBs.
+  if (BarrierSet::barrier_set()->barrier_set_nmethod() != NULL || !immediate) {
     address dummy = address(uintptr_t(pc()) & -wordSize); // A nearby aligned address
     ldr_constant(dst, Address(dummy, rspec));
   } else
     mov(dst, Address((address)obj, rspec));
+
 }
 
 // Move a metadata address into a register.
@@ -4305,22 +4308,15 @@ void MacroAssembler::bang_stack_size(Register size, Register tmp) {
   }
 }
 
-
 // Move the address of the polling page into dest.
-void MacroAssembler::get_polling_page(Register dest, address page, relocInfo::relocType rtype) {
-  if (SafepointMechanism::uses_thread_local_poll()) {
-    ldr(dest, Address(rthread, Thread::polling_page_offset()));
-  } else {
-    unsigned long off;
-    adrp(dest, Address(page, rtype), off);
-    assert(off == 0, "polling page must be page aligned");
-  }
+void MacroAssembler::get_polling_page(Register dest, relocInfo::relocType rtype) {
+  ldr(dest, Address(rthread, Thread::polling_page_offset()));
 }
 
 // Move the address of the polling page into r, then read the polling
 // page.
-address MacroAssembler::read_polling_page(Register r, address page, relocInfo::relocType rtype) {
-  get_polling_page(r, page, rtype);
+address MacroAssembler::fetch_and_read_polling_page(Register r, relocInfo::relocType rtype) {
+  get_polling_page(r, rtype);
   return read_polling_page(r, rtype);
 }
 

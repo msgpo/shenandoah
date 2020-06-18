@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, 2019, Red Hat Inc. All rights reserved.
+ * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -176,6 +176,8 @@ class MacroAssembler: public Assembler {
 
   using Assembler::ldr;
   using Assembler::str;
+  using Assembler::ldrw;
+  using Assembler::strw;
 
   void ldr(Register Rx, const Address &adr);
   void ldrw(Register Rw, const Address &adr);
@@ -809,6 +811,7 @@ public:
   // C 'boolean' to Java boolean: x == 0 ? 0 : 1
   void c2bool(Register x);
 
+  void load_method_holder_cld(Register rresult, Register rmethod);
   void load_method_holder(Register holder, Register method);
 
   // oop manipulations
@@ -816,6 +819,7 @@ public:
   void store_klass(Register dst, Register src);
   void cmp_klass(Register oop, Register trial_klass, Register tmp);
 
+  void resolve_weak_handle(Register result, Register tmp);
   void resolve_oop_handle(Register result, Register tmp = r5);
   void load_mirror(Register dst, Register method, Register tmp = r5);
 
@@ -975,9 +979,6 @@ public:
 
   // prints msg, dumps registers and stops execution
   void stop(const char* msg);
-
-  // prints msg and continues
-  void warn(const char* msg);
 
   static void debug64(char* msg, int64_t pc, int64_t regs[]);
 
@@ -1217,9 +1218,9 @@ public:
     }
   }
 
-  address read_polling_page(Register r, address page, relocInfo::relocType rtype);
   address read_polling_page(Register r, relocInfo::relocType rtype);
-  void get_polling_page(Register dest, address page, relocInfo::relocType rtype);
+  void get_polling_page(Register dest, relocInfo::relocType rtype);
+  address fetch_and_read_polling_page(Register r, relocInfo::relocType rtype);
 
   // CRC32 code for java.util.zip.CRC32::updateBytes() instrinsic.
   void update_byte_crc32(Register crc, Register val, Register table);
