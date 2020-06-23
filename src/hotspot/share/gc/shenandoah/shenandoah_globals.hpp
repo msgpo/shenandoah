@@ -322,6 +322,11 @@
           "Forcefully flush non-empty SATB buffers at this interval. "      \
           "Time is in milliseconds.")                                       \
                                                                             \
+  experimental(uintx, ShenandoahEvacLockGranularity, 0,                     \
+          "How coarse to make evac-locking. Default 0 means "               \
+          "per-HeapWord-locking, higher value make locking coarser "        \
+          "in 2-exponent steps, e.g. one lock per 2^N heap words.")         \
+                                                                            \
   diagnostic(bool, ShenandoahPreclean, true,                                \
           "Do concurrent preclean phase before final mark: process "        \
           "definitely alive references to avoid dealing with them during "  \

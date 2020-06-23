@@ -52,15 +52,12 @@ public:
    */
   static inline bool is_forwarded(oop obj);
 
-  /* Tries to atomically update forwardee in $holder object to $update.
+  /* Update forwardee in $holder object to $update.
    * Assumes $holder points at itself.
    * Asserts $holder is in from-space.
    * Asserts $update is in to-space.
-   *
-   * Returns the new object 'update' upon success, or
-   * the new forwardee that a competing thread installed.
    */
-  static inline oop try_update_forwardee(oop obj, oop update);
+  static inline void update_forwardee(oop obj, oop update);
 
 };
 

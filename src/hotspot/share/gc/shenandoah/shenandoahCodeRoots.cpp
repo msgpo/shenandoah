@@ -28,7 +28,6 @@
 #include "code/nmethod.hpp"
 #include "gc/shenandoah/shenandoahClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahCodeRoots.hpp"
-#include "gc/shenandoah/shenandoahEvacOOMHandler.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahNMethod.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
@@ -311,7 +310,6 @@ public:
 
   virtual void work(uint worker_id) {
     ICRefillVerifierMark mark(_verifier);
-    ShenandoahEvacOOMScope evac_scope;
     _iterator.nmethods_do(&_cl);
   }
 

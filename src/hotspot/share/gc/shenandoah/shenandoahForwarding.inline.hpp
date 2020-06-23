@@ -74,19 +74,10 @@ inline bool ShenandoahForwarding::is_forwarded(oop obj) {
   return obj->mark_raw().is_marked();
 }
 
-inline oop ShenandoahForwarding::try_update_forwardee(oop obj, oop update) {
+inline void ShenandoahForwarding::update_forwardee(oop obj, oop update) {
   markWord old_mark = obj->mark_raw();
-  if (old_mark.is_marked()) {
-    return oop(old_mark.clear_lock_bits().to_pointer());
-  }
-
   markWord new_mark = markWord::encode_pointer_as_mark(update);
-  markWord prev_mark = obj->cas_set_mark_raw(new_mark, old_mark);
-  if (prev_mark == old_mark) {
-    return update;
-  } else {
-    return oop(prev_mark.clear_lock_bits().to_pointer());
-  }
+  obj->set_mark_raw(new_mark);
 }
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHFORWARDING_INLINE_HPP

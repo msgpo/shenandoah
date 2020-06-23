@@ -31,7 +31,6 @@
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahAllocRequest.hpp"
 #include "gc/shenandoah/shenandoahLock.hpp"
-#include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
 #include "gc/shenandoah/shenandoahSharedVariables.hpp"
 #include "gc/shenandoah/shenandoahUnload.hpp"
@@ -42,6 +41,7 @@ class ConcurrentGCTimer;
 class ReferenceProcessor;
 class ShenandoahCollectorPolicy;
 class ShenandoahControlThread;
+class ShenandoahEvacLockingBitmap;
 class ShenandoahGCSession;
 class ShenandoahGCStateResetter;
 class ShenandoahHeuristics;
@@ -678,7 +678,10 @@ public:
 //
 private:
   ShenandoahCollectionSet* _collection_set;
-  ShenandoahEvacOOMHandler _oom_evac_handler;
+
+  MemRegion  _evac_locking_bitmap_region;
+  ShenandoahEvacLockingBitmap* _evac_locking_bitmap;
+  ShenandoahSharedFlag _evac_failed;
 
   void evacuate_and_update_roots();
 
@@ -696,10 +699,6 @@ public:
   // Evacuates object src. Returns the evacuated object, either evacuated
   // by this thread, or by some other thread.
   inline oop evacuate_object(oop src, Thread* thread);
-
-  // Call before/after evacuation.
-  inline void enter_evacuation(Thread* t);
-  inline void leave_evacuation(Thread* t);
 
 // ---------- Helper functions
 //

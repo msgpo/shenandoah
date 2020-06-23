@@ -32,6 +32,7 @@
 #include "gc/shenandoah/shenandoahAsserts.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.inline.hpp"
 #include "gc/shenandoah/shenandoahCollectionSet.inline.hpp"
+#include "gc/shenandoah/shenandoahEvacLockingBitmap.inline.hpp"
 #include "gc/shenandoah/shenandoahForwarding.inline.hpp"
 #include "gc/shenandoah/shenandoahWorkGroup.hpp"
 #include "gc/shenandoah/shenandoahHeap.hpp"
@@ -83,14 +84,6 @@ inline ShenandoahHeapRegion* const ShenandoahHeap::heap_region_containing(const 
   ShenandoahHeapRegion* const result = get_region(index);
   assert(addr >= result->bottom() && addr < result->end(), "Heap region contains the address: " PTR_FORMAT, p2i(addr));
   return result;
-}
-
-inline void ShenandoahHeap::enter_evacuation(Thread* t) {
-  _oom_evac_handler.enter_evacuation(t);
-}
-
-inline void ShenandoahHeap::leave_evacuation(Thread* t) {
-  _oom_evac_handler.leave_evacuation(t);
 }
 
 template <class T>
@@ -231,7 +224,7 @@ inline bool ShenandoahHeap::check_cancelled_gc_and_yield(bool sts_active) {
 
 inline void ShenandoahHeap::clear_cancelled_gc() {
   _cancelled_gc.set(CANCELLABLE);
-  _oom_evac_handler.clear();
+  _evac_failed.unset();
 }
 
 inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size) {
@@ -253,77 +246,60 @@ inline HeapWord* ShenandoahHeap::allocate_from_gclab(Thread* thread, size_t size
 }
 
 inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread) {
-  if (ShenandoahThreadLocalData::is_oom_during_evac(Thread::current())) {
-    // This thread went through the OOM during evac protocol and it is safe to return
-    // the forward pointer. It must not attempt to evacuate any more.
-    return ShenandoahBarrierSet::resolve_forwarded(p);
+
+  // Fast-path
+  if (ShenandoahForwarding::is_forwarded(p)) {
+    return ShenandoahForwarding::get_forwardee(p);
   }
 
-  assert(ShenandoahThreadLocalData::is_evac_allowed(thread), "must be enclosed in oom-evac scope");
+  {
+    ShenandoahEvacLocker evac_locker(_evac_locking_bitmap, p);
 
-  size_t size = p->size();
+    // Fast-path, double-checked
+    if (ShenandoahForwarding::is_forwarded(p)) {
+      return ShenandoahForwarding::get_forwardee(p);
+    }
 
-  assert(!heap_region_containing(p)->is_humongous(), "never evacuate humongous objects");
+    if (_evac_failed.is_set()) {
+      return p;
+    }
 
-  bool alloc_from_gclab = true;
-  HeapWord* copy = NULL;
+    assert(!heap_region_containing(p)->is_humongous(), "never evacuate humongous objects");
+
+    size_t size = p->size();
+    HeapWord* copy = NULL;
 
 #ifdef ASSERT
-  if (ShenandoahOOMDuringEvacALot &&
-      (os::random() & 1) == 0) { // Simulate OOM every ~2nd slow-path call
-        copy = NULL;
-  } else {
+    if (ShenandoahOOMDuringEvacALot &&
+        (os::random() & 1) == 0) { // Simulate OOM every ~2nd slow-path call
+      copy = NULL;
+    } else {
 #endif
-    if (UseTLAB) {
-      copy = allocate_from_gclab(thread, size);
+      if (UseTLAB) {
+        copy = allocate_from_gclab(thread, size);
+      }
+      if (copy == NULL) {
+        ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size);
+        copy = allocate_memory(req);
+      }
+#ifdef ASSERT
     }
+#endif
+
     if (copy == NULL) {
-      ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size);
-      copy = allocate_memory(req);
-      alloc_from_gclab = false;
+      control_thread()->handle_alloc_failure_evac(size);
+      _evac_failed.set();
+      return p;
     }
-#ifdef ASSERT
-  }
-#endif
 
-  if (copy == NULL) {
-    control_thread()->handle_alloc_failure_evac(size);
+    // Copy the object:
+    Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
 
-    _oom_evac_handler.handle_out_of_memory_during_evacuation();
-
-    return ShenandoahBarrierSet::resolve_forwarded(p);
-  }
-
-  // Copy the object:
-  Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(p), copy, size);
-
-  // Try to install the new forwarding pointer.
-  oop copy_val = oop(copy);
-  oop result = ShenandoahForwarding::try_update_forwardee(p, copy_val);
-  if (result == copy_val) {
-    // Successfully evacuated. Our copy is now the public one!
+    // Install the new forwarding pointer.
+    oop copy_val = oop(copy);
+    ShenandoahForwarding::update_forwardee(p, copy_val);
     shenandoah_assert_correct(NULL, copy_val);
     return copy_val;
-  }  else {
-    // Failed to evacuate. We need to deal with the object that is left behind. Since this
-    // new allocation is certainly after TAMS, it will be considered live in the next cycle.
-    // But if it happens to contain references to evacuated regions, those references would
-    // not get updated for this stale copy during this cycle, and we will crash while scanning
-    // it the next cycle.
-    //
-    // For GCLAB allocations, it is enough to rollback the allocation ptr. Either the next
-    // object will overwrite this stale copy, or the filler object on LAB retirement will
-    // do this. For non-GCLAB allocations, we have no way to retract the allocation, and
-    // have to explicitly overwrite the copy with the filler object. With that overwrite,
-    // we have to keep the fwdptr initialized and pointing to our (stale) copy.
-    if (alloc_from_gclab) {
-      ShenandoahThreadLocalData::gclab(thread)->undo_allocation(copy, size);
-    } else {
-      fill_with_object(copy, size);
-      shenandoah_assert_correct(NULL, copy_val);
-    }
-    shenandoah_assert_correct(NULL, result);
-    return result;
   }
 }
 
