@@ -46,7 +46,7 @@ class ShenandoahEvacLockingBitmap : public CHeapObj<mtGC> {
 private:
   MemRegion _covered;    // The heap area covered by this bitmap.
   const int _shifter;    // Shift amount from heap index to bit index in the bitmap.
-  CHeapBitMap _bm;        // The actual bitmap.
+  CHeapBitMap _bm;       // The actual bitmap.
 
   // Convert from address to bit offset.
   inline size_t addr_to_offset(const HeapWord* addr) const;
@@ -54,7 +54,7 @@ private:
 public:
   ShenandoahEvacLockingBitmap(MemRegion heap) :
   _covered(heap),
-  _shifter((1 + ShenandoahEvacLockGranularity) * LogHeapWordSize),
+  _shifter(ShenandoahEvacLockGranularity),
   _bm(_covered.word_size() >> _shifter, mtGC) {
 }
 

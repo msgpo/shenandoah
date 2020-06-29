@@ -322,10 +322,12 @@
           "Forcefully flush non-empty SATB buffers at this interval. "      \
           "Time is in milliseconds.")                                       \
                                                                             \
-  experimental(uintx, ShenandoahEvacLockGranularity, 0,                     \
-          "How coarse to make evac-locking. Default 0 means "               \
-          "per-HeapWord-locking, higher value make locking coarser "        \
-          "in 2-exponent steps, e.g. one lock per 2^N heap words.")         \
+  experimental(uintx, ShenandoahEvacLockGranularity, 3,                     \
+          "Defines the coarseness of evac-locking bitmap. Measured in "     \
+          "power-of-two steps. Zero means per-HeapWord-locking, default 3 " \
+          "means one lock per 2^3 = 8 heap words. Larger values improve "   \
+          "native footprint at expense of more potential contention during "\
+          "evacuation.")                                                    \
                                                                             \
   diagnostic(bool, ShenandoahPreclean, true,                                \
           "Do concurrent preclean phase before final mark: process "        \
