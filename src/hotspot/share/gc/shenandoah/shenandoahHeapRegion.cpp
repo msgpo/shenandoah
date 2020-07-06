@@ -609,6 +609,15 @@ void ShenandoahHeapRegion::setup_sizes(size_t max_heap_size) {
   guarantee(MaxTLABSizeBytes == 0, "we should only set it once");
   MaxTLABSizeBytes = MaxTLABSizeWords * HeapWordSize;
   assert (MaxTLABSizeBytes > MinTLABSize, "should be larger");
+
+  size_t locking_card_size = 1 << (ShenandoahEvacLockGranularity + LogHeapWordSize);
+  if (locking_card_size > RegionSizeBytes) {
+    size_t locking_card_size = 1 << (ShenandoahEvacLockGranularity + LogHeapWordSize);
+    err_msg message("Evac locking card size (" SIZE_FORMAT "%s) should be lower than region size (" SIZE_FORMAT "%s).",
+                    byte_size_in_proper_unit(locking_card_size), proper_unit_for_byte_size(locking_card_size),
+                    byte_size_in_proper_unit(RegionSizeBytes),   proper_unit_for_byte_size(RegionSizeBytes));
+    vm_exit_during_initialization("Invalid -XX:ShenandoahEvacLockGranularity option", message);
+  }
 }
 
 void ShenandoahHeapRegion::do_commit() {
